@@ -5,7 +5,7 @@ namespace Nexus.Core.Services
     /// <summary>
     /// Base class for singleton services that should only have one instance
     /// </summary>
-    public abstract class SingletonServiceBase : ServiceBase
+    public abstract class SingletonServiceBase : ServiceBase, ISingletonService
     {
         protected SingletonServiceBase()
         {

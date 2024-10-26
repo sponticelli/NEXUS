@@ -3,7 +3,7 @@ namespace Nexus.Core.Services
     /// <summary>
     /// Base class for transient services that can be created multiple times
     /// </summary>
-    public abstract class TransientServiceBase : ServiceBase
+    public abstract class TransientServiceBase : ServiceBase, ITransientService
     {
         protected TransientServiceBase()
         {
