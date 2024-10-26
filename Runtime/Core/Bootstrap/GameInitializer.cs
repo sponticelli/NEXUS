@@ -65,7 +65,15 @@ namespace Nexus.Core.Bootstrap
             DontDestroyOnLoad(gameObject);
             initializationComplete ??= new TaskCompletionSource<bool>();
 
-            await Initialize();
+            
+        }
+        
+        private async void Start()
+        {
+            if (isDebugInstance)
+            {
+                await Initialize();
+            }
         }
 
         public async Task Initialize()
@@ -123,12 +131,10 @@ namespace Nexus.Core.Bootstrap
 
         public void RegisterService(Type serviceType, object service)
         {
-            if (services.ContainsKey(serviceType))
+            if (!services.TryAdd(serviceType, service))
             {
                 throw new Exception($"Service of type {serviceType.Name} is already registered!");
             }
-
-            services[serviceType] = service;
 
             if (service is IInitializable initializable)
             {
@@ -146,6 +152,16 @@ namespace Nexus.Core.Bootstrap
 
             return (T)service;
         }
+        
+        public bool HasService<T>() where T : class
+        {
+            return HasService(typeof(T));
+        }
+        
+        public bool HasService(Type serviceType)
+        {
+            return services.ContainsKey(serviceType);
+        }
 
         private void OnDestroy()
         {
@@ -160,5 +176,7 @@ namespace Nexus.Core.Bootstrap
             services.Clear();
             initializableServices.Clear();
         }
+
+        
     }
 }
