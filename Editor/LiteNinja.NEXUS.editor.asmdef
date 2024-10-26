@@ -1,3 +1,16 @@
 {
-	"name": "LiteNinja.NEXUS.editor"
+    "name": "LiteNinja.NEXUS.editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:2850219f6d64d4249bddfe2b15cbcea9"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
 }
