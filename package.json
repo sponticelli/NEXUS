@@ -1,0 +1,21 @@
+{
+    "name": "com.liteninja.nexus",
+    "version": "1.0.0",
+    "displayName": "NEXUS Framework",
+    "description": "Network of Extensible Unity Systems - A modern Unity game framework",
+    "unity": "2022.3",
+    "dependencies": {
+      "com.unity.addressables": "1.22.3",
+      "com.unity.textmeshpro": "3.0.9"
+    },
+    "keywords": [
+      "framework",
+      "game",
+      "unity"
+    ],
+    "author": {
+      "name": "Sandro Ponticelli",
+      "email": "sandro.ponticelli@gmail.com",
+      "url": "https://github.com/sponticelli"
+    }
+  }
