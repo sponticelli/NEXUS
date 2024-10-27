@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace Nexus.Core.Services
 {
@@ -11,6 +12,16 @@ namespace Nexus.Core.Services
         private static readonly Dictionary<UnityEngine.SceneManagement.Scene, List<object>> sceneServices
             = new Dictionary<UnityEngine.SceneManagement.Scene, List<object>>();
 
+        static SceneContext()
+        {
+            Application.quitting += () =>
+            {
+                Debug.Log("Quitting application, cleaning up scene services");
+                sceneServices.Clear();
+            };
+        }
+        
+        
         public static void RegisterSceneService(UnityEngine.SceneManagement.Scene scene, object service)
         {
             if (!sceneServices.ContainsKey(scene))
@@ -19,6 +30,11 @@ namespace Nexus.Core.Services
             }
 
             sceneServices[scene].Add(service);
+        }
+        
+        public static List<object> GetSceneServices(UnityEngine.SceneManagement.Scene scene)
+        {
+            return sceneServices.GetValueOrDefault(scene);
         }
 
         public static void CleanupSceneServices(UnityEngine.SceneManagement.Scene scene)

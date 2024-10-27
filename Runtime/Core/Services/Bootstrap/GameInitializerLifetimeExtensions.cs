@@ -42,6 +42,19 @@ namespace Nexus.Core.Services
             // Optional: Track the service's scene association
             SceneContext.RegisterSceneService(scene, implementation);
         }
+        
+        public static void DeregisterScopedService(
+            this GameInitializer initializer,
+            UnityEngine.SceneManagement.Scene scene) 
+        {
+            var services = SceneContext.GetSceneServices(scene);
+            foreach (var service in services)
+            {
+                initializer.DeregisterService(service.GetType());
+            }
+            // Remove from scene context
+            SceneContext.CleanupSceneServices(scene);
+        }
 
         public static TService CreateTransientService<TService>(
             this GameInitializer initializer) where TService : class, new()

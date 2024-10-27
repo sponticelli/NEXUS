@@ -16,6 +16,17 @@ namespace Nexus.Core.Bootstrap
         [SerializeField] private GameConfig gameConfig;
         [SerializeField] private bool isDebugInstance;
 
+        
+        public static bool IsDisposed => instance == null;
+        
+        static GameInitializer()
+        {
+            Application.quitting += () =>
+            {
+                instance = null;
+            };
+        }
+        
         public static GameInitializer Instance
         {
             get
@@ -153,6 +164,37 @@ namespace Nexus.Core.Bootstrap
             return (T)service;
         }
         
+        public T DeregisterService<T>() where T : class
+        {
+            var serviceType = typeof(T);
+            if (!services.TryGetValue(serviceType, out var service))
+            {
+                throw new Exception($"Service of type {serviceType.Name} is not registered!");
+            }
+
+            services.Remove(serviceType);
+            if (service is IInitializable initializable)
+            {
+                initializableServices.Remove(initializable);
+            }
+
+            return (T)service;
+        }
+        
+        public void DeregisterService(Type serviceType)
+        {
+            if (!services.TryGetValue(serviceType, out var service))
+            {
+                throw new Exception($"Service of type {serviceType.Name} is not registered!");
+            }
+
+            services.Remove(serviceType);
+            if (service is IInitializable initializable)
+            {
+                initializableServices.Remove(initializable);
+            }
+        }
+        
         public bool HasService<T>() where T : class
         {
             return HasService(typeof(T));
@@ -176,6 +218,8 @@ namespace Nexus.Core.Bootstrap
             services.Clear();
             initializableServices.Clear();
         }
+        
+        
 
         
     }
