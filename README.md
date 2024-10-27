@@ -1,4 +1,4 @@
-Copy# NEXUS Framework
+# NEXUS Framework
 
 Network of Extensible Unity Systems - A modern Unity game framework
 
@@ -13,3 +13,6 @@ Network of Extensible Unity Systems - A modern Unity game framework
 ### Option 2: Manual Installation
 1. Download the latest release
 2. Extract the package into your project's `Packages` folder
+
+## Features
+- **[Service Locator](Documentation%7E%2FServiceLocator.md)**
