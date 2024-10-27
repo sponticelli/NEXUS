@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System;
 using System.Threading.Tasks;
+using Nexus.Core.Services;
 
 namespace Nexus.Core.Bootstrap
 {
@@ -64,7 +65,7 @@ namespace Nexus.Core.Bootstrap
             return initializationComplete.Task;
         }
 
-        private async void Awake()
+        private void Awake()
         {
             if (instance != null && instance != this)
             {
@@ -75,8 +76,6 @@ namespace Nexus.Core.Bootstrap
             instance = this;
             DontDestroyOnLoad(gameObject);
             initializationComplete ??= new TaskCompletionSource<bool>();
-
-            
         }
         
         private async void Start()
@@ -195,6 +194,13 @@ namespace Nexus.Core.Bootstrap
             }
         }
         
+        public void DeregisterService(object service)
+        {
+            var serviceType = service.GetType();
+            DeregisterService(serviceType);
+        }
+
+        
         public bool HasService<T>() where T : class
         {
             return HasService(typeof(T));
@@ -218,8 +224,7 @@ namespace Nexus.Core.Bootstrap
             services.Clear();
             initializableServices.Clear();
         }
-        
-        
+
 
         
     }

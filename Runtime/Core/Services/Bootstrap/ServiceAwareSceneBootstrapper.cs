@@ -71,6 +71,10 @@ namespace Nexus.Core.Services
             {
                 try
                 {
+                    if (!GameInitializer.IsDisposed)
+                    {
+                        GameInitializer.Instance.DeregisterService(sceneServices[i]);
+                    }
                     await sceneServices[i].Shutdown();
                 }
                 catch (Exception ex)

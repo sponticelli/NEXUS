@@ -7,6 +7,23 @@ namespace Nexus.Core.Services
     /// <summary>
     /// Provides error handling and recovery capabilities for services
     /// </summary>
+    /// <example>
+    /// public async Task InitializeWithRecovery()
+    /// {
+    ///     var service = new UserService();
+    ///     var errorHandler = new ServiceErrorHandler(service);
+    ///     try
+    ///     {
+    ///         await service.Initialize()
+    ///         .WithErrorHandling("UserService initialization");
+    ///     }
+    ///     catch (ServiceException)
+    ///     {
+    ///         await errorHandler.TryRecoverAsync();
+    ///     }
+    /// }
+    /// </example>
+
     public class ServiceErrorHandler
     {
         private readonly IServiceLifecycle service;

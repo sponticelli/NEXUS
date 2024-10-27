@@ -24,9 +24,11 @@ namespace Nexus.Core.Bootstrap.Scenes
             await RegisterDefaultServices();
         }
 
+        /// <summary>
+        /// Override this to register your normal services
+        /// </summary>
         protected virtual async Task RegisterDefaultServices()
         {
-            // Override this to register your normal services
             await Task.CompletedTask;
         }
 
