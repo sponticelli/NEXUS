@@ -6,6 +6,10 @@ using UnityEngine.SceneManagement;
 
 namespace Nexus.Core.ServiceLocation
 {
+    // Attribute to mark constructor for dependency injection
+    [AttributeUsage(AttributeTargets.Constructor)]
+    public class ServiceConstructorAttribute : Attribute { }
+    
     public enum ServiceLifetime
     {
         Singleton,
@@ -23,6 +27,7 @@ namespace Nexus.Core.ServiceLocation
         private static ServiceLocator instance;
         private readonly Dictionary<Type, ServiceRegistry> registries = new Dictionary<Type, ServiceRegistry>();
         private readonly Dictionary<string, Dictionary<Type, object>> sceneScopedServices = new Dictionary<string, Dictionary<Type, object>>();
+        private readonly HashSet<Type> servicesBeingResolved = new HashSet<Type>();
 
         private class ServiceRegistry
         {
@@ -32,6 +37,7 @@ namespace Nexus.Core.ServiceLocation
             public bool IsMonoBehaviour { get; set; }
             public Func<object> Factory { get; set; }
             public object Configuration { get; set; }
+            public Type[] Dependencies { get; set; }
         }
 
         public static ServiceLocator Instance
@@ -83,15 +89,19 @@ namespace Nexus.Core.ServiceLocation
             Type implementationType = typeof(TImplementation);
 
             bool isMonoBehaviour = typeof(MonoBehaviour).IsAssignableFrom(implementationType);
+            Type[] dependencies = GetDependencies(implementationType);
 
-            registries[interfaceType] = new ServiceRegistry
+            var registry = new ServiceRegistry
             {
                 ImplementationType = implementationType,
                 Lifetime = lifetime,
                 IsMonoBehaviour = isMonoBehaviour,
                 Configuration = configuration,
+                Dependencies = dependencies,
                 Factory = () => CreateAndConfigureInstance(implementationType, isMonoBehaviour, configuration)
             };
+
+            registries[interfaceType] = registry;
         }
         
         // Register without configuration (overload for backward compatibility)
@@ -111,6 +121,7 @@ namespace Nexus.Core.ServiceLocation
             where TConfig : class
         {
             Type interfaceType = typeof(TInterface);
+            Type implementationType = instance.GetType();
             bool isMonoBehaviour = instance is MonoBehaviour;
 
             // Configure the instance if it's configurable
@@ -121,11 +132,11 @@ namespace Nexus.Core.ServiceLocation
 
             var registry = new ServiceRegistry
             {
-                ImplementationType = instance.GetType(),
+                ImplementationType = implementationType,
                 Lifetime = lifetime,
                 IsMonoBehaviour = isMonoBehaviour,
                 SingletonInstance = lifetime == ServiceLifetime.Singleton ? instance : null,
-                // Remove the Configuration property since it's not needed
+                Dependencies = GetDependencies(implementationType),  // Add this
                 Factory = () => instance
             };
 
@@ -186,92 +197,174 @@ namespace Nexus.Core.ServiceLocation
         public T GetService<T>() where T : class
         {
             Type type = typeof(T);
-        
+
             if (!registries.TryGetValue(type, out ServiceRegistry registry))
             {
                 Debug.LogError($"No service of type {type.Name} has been registered!");
                 return null;
             }
 
-            switch (registry.Lifetime)
+            return registry.Lifetime switch
             {
-                case ServiceLifetime.Singleton:
-                    return GetOrCreateSingleton<T>(registry);
-                
-                case ServiceLifetime.SceneScoped:
-                    return GetOrCreateSceneScoped<T>(registry);
-                
-                case ServiceLifetime.Transient:
-                    return CreateTransient<T>(registry);
-                
-                default:
-                    throw new ArgumentException($"Unsupported lifetime: {registry.Lifetime}");
+                ServiceLifetime.Singleton => GetOrCreateSingleton(registry, type) as T,
+                ServiceLifetime.SceneScoped => GetOrCreateSceneScoped(registry, type) as T,
+                ServiceLifetime.Transient => CreateTransient(registry, type) as T,
+                _ => throw new ArgumentException($"Unsupported lifetime: {registry.Lifetime}")
+            };
+        }
+        
+        private object GetOrCreateSingleton(ServiceRegistry registry, Type serviceType)
+        {
+            // If instance already exists, return it (thread-safe way)
+            if (registry.SingletonInstance != null)
+            {
+                return registry.SingletonInstance;
+            }
+
+            // Lock to prevent multiple threads from creating instances simultaneously
+            lock (registry)
+            {
+                // Double-check in case another thread created the instance
+                if (registry.SingletonInstance != null)
+                {
+                    return registry.SingletonInstance;
+                }
+
+                try
+                {
+                    // Create the instance using the factory
+                    registry.SingletonInstance = registry.Factory();
+            
+                    Debug.Log($"Created singleton instance of {serviceType.Name}");
+
+                    if (registry.SingletonInstance == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Factory failed to create instance of {serviceType.Name}");
+                    }
+
+                    return registry.SingletonInstance;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Failed to create singleton instance of {serviceType.Name}: {ex.Message}");
+                    throw;
+                }
             }
         }
         
-        private T GetOrCreateSingleton<T>(ServiceRegistry registry) where T : class
-        {
-            registry.SingletonInstance ??= registry.Factory();
-            return registry.SingletonInstance as T;
-        }
-        
-        private T GetOrCreateSceneScoped<T>(ServiceRegistry registry) where T : class
+        private object GetOrCreateSceneScoped(ServiceRegistry registry, Type serviceType)
         {
             string currentScene = SceneManager.GetActiveScene().name;
             EnsureSceneDictionary(currentScene);
 
             var sceneServices = sceneScopedServices[currentScene];
-            Type type = typeof(T);
 
-            if (!sceneServices.TryGetValue(type, out object service))
+            if (!sceneServices.TryGetValue(serviceType, out object service))
             {
-                service = registry.Factory();
-                sceneServices[type] = service;
+                try
+                {
+                    service = registry.Factory();
+            
+                    if (service == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Factory failed to create scene-scoped instance of {serviceType.Name}");
+                    }
+
+                    sceneServices[serviceType] = service;
+                    Debug.Log($"Created scene-scoped instance of {serviceType.Name} for scene {currentScene}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Failed to create scene-scoped instance of {serviceType.Name}: {ex.Message}");
+                    throw;
+                }
             }
 
-            return service as T;
+            return service;
         }
         
-        private T CreateTransient<T>(ServiceRegistry registry) where T : class
+        private object CreateTransient(ServiceRegistry registry, Type serviceType)
         {
-            return registry.Factory() as T;
+            try
+            {
+                var instance = registry.Factory();
+        
+                if (instance == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Factory failed to create transient instance of {serviceType.Name}");
+                }
+
+                return instance;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to create transient instance of {serviceType.Name}: {ex.Message}");
+                throw;
+            }
         }
         
         private object CreateAndConfigureInstance(Type type, bool isMonoBehaviour, object configuration)
         {
-            object instance;
-            
-            if (!isMonoBehaviour)
+            // Check for circular dependencies
+            if (servicesBeingResolved.Contains(type))
             {
-                instance = Activator.CreateInstance(type);
-            }
-            else
-            {
-                GameObject serviceObject = new GameObject($"{type.Name}Service");
-                
-                var registry = registries.FirstOrDefault(r => r.Value.ImplementationType == type).Value;
-                
-                if (registry != null && registry.Lifetime == ServiceLifetime.Singleton)
-                {
-                    serviceObject.transform.SetParent(transform);
-                    DontDestroyOnLoad(serviceObject);
-                }
-                
-                instance = serviceObject.AddComponent(type);
+                throw new InvalidOperationException(
+                    $"Circular dependency detected while resolving {type.Name}. Resolution path: {string.Join(" -> ", servicesBeingResolved)}");
             }
 
-            // Configure the instance if it's configurable
-            if (configuration != null)
-            {
-                Type configurableType = typeof(IConfigurable<>).MakeGenericType(configuration.GetType());
-                if (configurableType.IsAssignableFrom(type))
-                {
-                    var configureMethod = type.GetMethod("Configure", new[] { configuration.GetType() });
-                    configureMethod?.Invoke(instance, new[] { configuration });
-                }
-            }
+            servicesBeingResolved.Add(type);
 
-            return instance;
+            try
+            {
+                object instance;
+
+                if (!isMonoBehaviour)
+                {
+                    // Get constructor dependencies
+                    var dependencies = GetDependencies(type);
+                    var resolvedDependencies = dependencies.Select(ResolveServiceType).ToArray();
+
+                    // Create instance with dependencies
+                    instance = Activator.CreateInstance(type, resolvedDependencies);
+                }
+                else
+                {
+                    GameObject serviceObject = new GameObject($"{type.Name}Service");
+                    
+                    var registry = registries.FirstOrDefault(r => r.Value.ImplementationType == type).Value;
+                    
+                    if (registry != null && registry.Lifetime == ServiceLifetime.Singleton)
+                    {
+                        serviceObject.transform.SetParent(transform);
+                        DontDestroyOnLoad(serviceObject);
+                    }
+                    
+                    instance = serviceObject.AddComponent(type);
+
+                    // For MonoBehaviours, inject dependencies through properties
+                    InjectProperties(instance);
+                }
+
+                // Configure if needed
+                if (configuration != null)
+                {
+                    Type configurableType = typeof(IConfigurable<>).MakeGenericType(configuration.GetType());
+                    if (configurableType.IsAssignableFrom(type))
+                    {
+                        var configureMethod = type.GetMethod("Configure", new[] { configuration.GetType() });
+                        configureMethod?.Invoke(instance, new[] { configuration });
+                    }
+                }
+
+                return instance;
+            }
+            finally
+            {
+                servicesBeingResolved.Remove(type);
+            }
         }
         
         private void EnsureSceneDictionary(string sceneName)
@@ -338,6 +431,55 @@ namespace Nexus.Core.ServiceLocation
 
             registries.Clear();
             sceneScopedServices.Clear();
+        }
+        
+        private Type[] GetDependencies(Type type)
+        {
+            // Try to find constructor with [ServiceConstructor] attribute
+            var constructor = type.GetConstructors()
+                .FirstOrDefault(c => c.GetCustomAttributes(typeof(ServiceConstructorAttribute), true).Any());
+
+            // If no attributed constructor found, use the one with the most parameters
+            if (constructor == null)
+            {
+                constructor = type.GetConstructors()
+                    .OrderByDescending(c => c.GetParameters().Length)
+                    .FirstOrDefault();
+            }
+
+            return constructor?.GetParameters()
+                .Select(p => p.ParameterType)
+                .ToArray() ?? Array.Empty<Type>();
+        }
+        
+        private void InjectProperties(object instance)
+        {
+            var properties = instance.GetType()
+                .GetProperties()
+                .Where(p => p.CanWrite && registries.ContainsKey(p.PropertyType));
+
+            foreach (var property in properties)
+            {
+                var service = ResolveServiceType(property.PropertyType);
+                property.SetValue(instance, service);
+            }
+        }
+        
+        private object ResolveServiceType(Type serviceType)
+        {
+            if (!registries.TryGetValue(serviceType, out var registry))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot resolve dependency of type {serviceType.Name} as it hasn't been registered.");
+            }
+
+            return registry.Lifetime switch
+            {
+                ServiceLifetime.Singleton => GetOrCreateSingleton(registry, serviceType),
+                ServiceLifetime.SceneScoped => GetOrCreateSceneScoped(registry, serviceType),
+                ServiceLifetime.Transient => CreateTransient(registry, serviceType),
+                _ => throw new ArgumentException($"Unsupported lifetime: {registry.Lifetime}")
+            };
         }
     }
     
