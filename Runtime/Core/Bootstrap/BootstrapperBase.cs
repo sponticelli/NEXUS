@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Nexus.Core.ServiceLocation;
 using Nexus.Core.Services;
@@ -42,43 +43,57 @@ namespace Nexus.Core.Bootstrap
 
         protected async Task RegisterServices()
         {
-            List<Task> initializationTasks = new List<Task>();
-            List<IInitiable> initiableServices = new List<IInitiable>();
+            var serviceDefinitions = serviceRegistryAsset.services;
 
-            foreach (var serviceDef in serviceRegistryAsset.services)
+            // Build the dependency graph
+            var dependencyGraph = BuildDependencyGraph(serviceDefinitions);
+
+            // Perform topological sort
+            List<Type> sortedServiceTypes;
+            try
             {
-                // Check if service is already registered
-                if (ServiceLocator.Instance.CanResolve(serviceDef.interfaceType.Type))
-                {
-                    Debug.LogWarning($"Service {serviceDef.interfaceType.Type.Name} is already registered");
-                    continue;
-                }
-                
-                var instance = RegisterService(serviceDef);
-
-                if (instance is IInitiable initiableService)
-                {
-                    initiableServices.Add(initiableService);
-                }
+                sortedServiceTypes = TopologicalSort(dependencyGraph);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to sort services: {ex.Message}");
+                return;
             }
 
-            await InitializeServices(initiableServices, initializationTasks);
-        }
+            // Map implementation types to service definitions
+            var serviceDefMap = serviceDefinitions.ToDictionary(def => def.implementationType.Type);
 
-        private static async Task InitializeServices(List<IInitiable> initiableServices, List<Task> initializationTasks)
-        {
-            // Call InitializeAsync on all IInitiable services
-            foreach (var initiableService in initiableServices)
+            List<Task> initializationTasks = new List<Task>();
+
+            // Register and initialize services in order
+            foreach (var implementationType in sortedServiceTypes)
             {
-                var initTask = initiableService.InitializeAsync();
-                initializationTasks.Add(initTask);
+                if (serviceDefMap.TryGetValue(implementationType, out var serviceDef))
+                {
+                    if (ServiceLocator.Instance.CanResolve(serviceDef.interfaceType.Type))
+                    {
+                        Debug.LogWarning($"Service {serviceDef.serviceName} already registered");
+                        continue;
+                    }
+                    
+                    var instance = RegisterService(serviceDef);
+
+                    if (instance is IInitiable initiableService)
+                    {
+                        var initTask = initiableService.InitializeAsync();
+                        initializationTasks.Add(initTask);
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"Service definition not found for type {implementationType.FullName}");
+                }
             }
 
             // Wait for all initialization tasks to complete
             await Task.WhenAll(initializationTasks);
         }
-
-
+        
         private object RegisterService(ServiceDefinition serviceDef)
         {
             Type interfaceType = serviceDef.interfaceType.Type;
@@ -161,6 +176,85 @@ namespace Nexus.Core.Bootstrap
                 Debug.LogWarning(
                     $"Service {instance.GetType().Name} does not implement IConfigurable<{configType.Name}>");
             }
+        }
+        
+        private Dictionary<Type, List<Type>> BuildDependencyGraph(List<ServiceDefinition> serviceDefinitions)
+        {
+            var dependencyGraph = new Dictionary<Type, List<Type>>();
+
+            foreach (var serviceDef in serviceDefinitions)
+            {
+                Type implementationType = serviceDef.implementationType.Type;
+
+                if (implementationType == null)
+                {
+                    Debug.LogError($"Invalid implementation type for {serviceDef.serviceName}");
+                    continue;
+                }
+
+                var dependencies = new List<Type>();
+
+                // Get dependencies from ServiceDependencyAttribute
+                var dependencyAttributes = implementationType.GetCustomAttributes(typeof(ServiceDependencyAttribute), true);
+                foreach (ServiceDependencyAttribute attr in dependencyAttributes)
+                {
+                    dependencies.Add(attr.DependencyType);
+                }
+
+                dependencyGraph[implementationType] = dependencies;
+            }
+
+            return dependencyGraph;
+        }
+        
+        private List<Type> TopologicalSort(Dictionary<Type, List<Type>> dependencyGraph)
+        {
+            var sortedList = new List<Type>();
+            var visited = new Dictionary<Type, bool>();
+
+            foreach (var node in dependencyGraph.Keys)
+            {
+                if (!visited.ContainsKey(node))
+                {
+                    if (!TopologicalSortUtil(node, visited, sortedList, dependencyGraph))
+                    {
+                        throw new Exception("Circular dependency detected in services.");
+                    }
+                }
+            }
+
+            return sortedList;
+        }
+
+        private bool TopologicalSortUtil(Type node, Dictionary<Type, bool> visited, List<Type> sortedList, Dictionary<Type, List<Type>> dependencyGraph)
+        {
+            visited[node] = true;
+
+            if (dependencyGraph.TryGetValue(node, out var dependencies))
+            {
+                foreach (var dep in dependencies)
+                {
+                    if (!visited.TryGetValue(dep, out var inProcess))
+                    {
+                        if (!TopologicalSortUtil(dep, visited, sortedList, dependencyGraph))
+                        {
+                            return false;
+                        }
+                    }
+                    else if (inProcess)
+                    {
+                        // Circular dependency detected
+                        return false;
+                    }
+                }
+            }
+
+            visited[node] = false; // Mark as processed
+            if (!sortedList.Contains(node))
+            {
+                sortedList.Add(node);
+            }
+            return true;
         }
     }
 }
