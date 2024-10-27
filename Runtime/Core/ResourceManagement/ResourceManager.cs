@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Nexus.Core.Services;
 using UnityEngine;
 
-namespace Nexus.Core.Services
+namespace Nexus.Core.ResourceManagement
 {
     /// <summary>
     /// Helper class for resource management
@@ -14,7 +15,7 @@ namespace Nexus.Core.Services
         private readonly Dictionary<string, WeakReference> cachedResources = new Dictionary<string, WeakReference>();
         private readonly object cacheLock = new object();
 
-        public async Task<T> LoadResource<T>(string path, IProgress<float> progress = null, CancellationToken cancellationToken = default) where T : UnityEngine.Object
+        public async Task<T> LoadResource<T>(string path, Utils.Progress.IProgress<float> progress = null, CancellationToken cancellationToken = default) where T : UnityEngine.Object
         {
             cancellationToken.ThrowIfCancellationRequested();
 

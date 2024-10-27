@@ -1,4 +1,4 @@
-namespace Nexus.Core.Services
+namespace Nexus.Core.Utils.Progress
 {
     /// <summary>
     /// Interface for tracking async operation progress

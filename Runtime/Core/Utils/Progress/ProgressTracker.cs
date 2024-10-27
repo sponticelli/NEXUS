@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace Nexus.Core.Services
+namespace Nexus.Core.Utils.Progress
 {
     /// <summary>
     /// Tracks progress of async operations with support for cancellation
