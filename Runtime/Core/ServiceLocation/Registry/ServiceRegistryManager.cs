@@ -44,6 +44,21 @@ namespace Nexus.Core.ServiceLocation
 
             registries[interfaceType] = registry;
         }
+        
+        public void Register(Type interfaceType, Type implementationType, ServiceLifetime lifetime, Func<object> factory = null)
+        {
+            bool isMonoBehaviour = typeof(MonoBehaviour).IsAssignableFrom(implementationType);
+
+            var registry = new ServiceRegistry
+            {
+                ImplementationType = implementationType,
+                Lifetime = lifetime,
+                IsMonoBehaviour = isMonoBehaviour,
+                Factory = factory ?? (() => serviceFactory.CreateInstance(implementationType, isMonoBehaviour, null))
+            };
+
+            registries[interfaceType] = registry;
+        }
 
         public void RegisterInstance<TInterface>(TInterface instance,
             ServiceLifetime lifetime = ServiceLifetime.Singleton)

@@ -7,6 +7,9 @@ namespace Nexus.Core.ServiceLocation
         void Register<TInterface, TImplementation>(ServiceLifetime lifetime)
             where TInterface : class
             where TImplementation : class, TInterface;
+        
+        void Register(Type interfaceType, Type implementationType, ServiceLifetime lifetime, Func<object> factory = null);
+
 
         void RegisterWithConfig<TInterface, TImplementation, TConfig>(
             ServiceLifetime lifetime,

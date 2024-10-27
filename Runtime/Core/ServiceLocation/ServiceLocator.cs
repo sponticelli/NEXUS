@@ -69,6 +69,11 @@ namespace Nexus.Core.ServiceLocation
         {
             return (T)ResolveType(typeof(T));
         }
+        
+        public object GetService(Type serviceType)
+        {
+            return ResolveType(serviceType);
+        }
 
         public object ResolveType(Type serviceType)
         {
@@ -92,6 +97,11 @@ namespace Nexus.Core.ServiceLocation
             where TImplementation : class, TInterface
         {
             registry.Register<TInterface, TImplementation>(lifetime);
+        }
+        
+        public void Register(Type interfaceType, Type implementationType, ServiceLifetime lifetime, Func<object> factory = null)
+        {
+            registry.Register(interfaceType, implementationType, lifetime, factory);
         }
 
         public void RegisterWithConfig<TInterface, TImplementation, TConfig>(
