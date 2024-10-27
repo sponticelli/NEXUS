@@ -12,6 +12,11 @@ namespace Nexus.Core.ServiceLocation
         SceneScoped,
         Transient
     }
+    
+    public interface IConfigurable<in TConfig>
+    {
+        void Configure(TConfig configuration);
+    }
 
     public class ServiceLocator : MonoBehaviour
     {
@@ -26,6 +31,7 @@ namespace Nexus.Core.ServiceLocation
             public object SingletonInstance { get; set; }
             public bool IsMonoBehaviour { get; set; }
             public Func<object> Factory { get; set; }
+            public object Configuration { get; set; }
         }
 
         public static ServiceLocator Instance
@@ -66,9 +72,12 @@ namespace Nexus.Core.ServiceLocation
             CleanupAllServices();
         }
         
-        public void RegisterService<TInterface, TImplementation>(ServiceLifetime lifetime) 
+        public void RegisterService<TInterface, TImplementation, TConfig>(
+            ServiceLifetime lifetime, 
+            TConfig configuration = default) 
             where TInterface : class 
             where TImplementation : class, TInterface
+            where TConfig : class
         {
             Type interfaceType = typeof(TInterface);
             Type implementationType = typeof(TImplementation);
@@ -80,15 +89,35 @@ namespace Nexus.Core.ServiceLocation
                 ImplementationType = implementationType,
                 Lifetime = lifetime,
                 IsMonoBehaviour = isMonoBehaviour,
-                Factory = () => CreateInstance(implementationType, isMonoBehaviour)
+                Configuration = configuration,
+                Factory = () => CreateAndConfigureInstance(implementationType, isMonoBehaviour, configuration)
             };
         }
         
-        public void RegisterInstance<TInterface>(TInterface instance, ServiceLifetime lifetime = ServiceLifetime.Singleton) 
+        // Register without configuration (overload for backward compatibility)
+        public void RegisterService<TInterface, TImplementation>(ServiceLifetime lifetime) 
+            where TInterface : class 
+            where TImplementation : class, TInterface
+        {
+            RegisterService<TInterface, TImplementation, object>(lifetime, null);
+        }
+        
+        // Register instance with configuration
+        public void RegisterInstance<TInterface, TConfig>(
+            TInterface instance, 
+            ServiceLifetime lifetime = ServiceLifetime.Singleton,
+            TConfig configuration = default) 
             where TInterface : class
+            where TConfig : class
         {
             Type interfaceType = typeof(TInterface);
             bool isMonoBehaviour = instance is MonoBehaviour;
+
+            // Configure the instance if it's configurable
+            if (instance is IConfigurable<TConfig> configurable && configuration != null)
+            {
+                configurable.Configure(configuration);
+            }
 
             var registry = new ServiceRegistry
             {
@@ -96,6 +125,7 @@ namespace Nexus.Core.ServiceLocation
                 Lifetime = lifetime,
                 IsMonoBehaviour = isMonoBehaviour,
                 SingletonInstance = lifetime == ServiceLifetime.Singleton ? instance : null,
+                // Remove the Configuration property since it's not needed
                 Factory = () => instance
             };
 
@@ -106,6 +136,50 @@ namespace Nexus.Core.ServiceLocation
                 string currentScene = SceneManager.GetActiveScene().name;
                 EnsureSceneDictionary(currentScene);
                 sceneScopedServices[currentScene][interfaceType] = instance;
+            }
+        }
+        
+        public void ReconfigureService<TInterface, TConfig>(TConfig newConfiguration)
+            where TInterface : class
+            where TConfig : class
+        {
+            Type interfaceType = typeof(TInterface);
+    
+            if (!registries.TryGetValue(interfaceType, out var registry))
+            {
+                Debug.LogError($"No service of type {interfaceType.Name} has been registered!");
+                return;
+            }
+
+            object instance = null;
+    
+            // Get the instance based on lifetime
+            switch (registry.Lifetime)
+            {
+                case ServiceLifetime.Singleton:
+                    instance = registry.SingletonInstance;
+                    break;
+                case ServiceLifetime.SceneScoped:
+                    string currentScene = SceneManager.GetActiveScene().name;
+                    if (sceneScopedServices.TryGetValue(currentScene, out var sceneServices))
+                    {
+                        sceneServices.TryGetValue(interfaceType, out instance);
+                    }
+                    break;
+                case ServiceLifetime.Transient:
+                    Debug.LogWarning("Cannot reconfigure transient services as they are created on-demand.");
+                    return;
+            }
+
+            // Configure the instance if it exists and is configurable
+            if (instance is IConfigurable<TConfig> configurable)
+            {
+                configurable.Configure(newConfiguration);
+                Debug.Log($"Service of type {interfaceType.Name} has been reconfigured");
+            }
+            else
+            {
+                Debug.LogError($"Service of type {interfaceType.Name} is not configurable with configuration type {typeof(TConfig).Name}");
             }
         }
         
@@ -163,24 +237,41 @@ namespace Nexus.Core.ServiceLocation
             return registry.Factory() as T;
         }
         
-        private object CreateInstance(Type type, bool isMonoBehaviour)
+        private object CreateAndConfigureInstance(Type type, bool isMonoBehaviour, object configuration)
         {
-            if (!isMonoBehaviour) return Activator.CreateInstance(type);
+            object instance;
             
-            GameObject serviceObject = new GameObject($"{type.Name}Service");
-        
-            // Get the registry for this type to check its lifetime
-            var registry = registries.FirstOrDefault(r => r.Value.ImplementationType == type).Value;
-        
-            // If it's a singleton MonoBehaviour, parent it to the ServiceLocator and mark it DontDestroyOnLoad
-            if (registry != null && registry.Lifetime == ServiceLifetime.Singleton)
+            if (!isMonoBehaviour)
             {
-                serviceObject.transform.SetParent(this.transform);
-                DontDestroyOnLoad(serviceObject);
+                instance = Activator.CreateInstance(type);
             }
-        
-            return serviceObject.AddComponent(type);
+            else
+            {
+                GameObject serviceObject = new GameObject($"{type.Name}Service");
+                
+                var registry = registries.FirstOrDefault(r => r.Value.ImplementationType == type).Value;
+                
+                if (registry != null && registry.Lifetime == ServiceLifetime.Singleton)
+                {
+                    serviceObject.transform.SetParent(transform);
+                    DontDestroyOnLoad(serviceObject);
+                }
+                
+                instance = serviceObject.AddComponent(type);
+            }
 
+            // Configure the instance if it's configurable
+            if (configuration != null)
+            {
+                Type configurableType = typeof(IConfigurable<>).MakeGenericType(configuration.GetType());
+                if (configurableType.IsAssignableFrom(type))
+                {
+                    var configureMethod = type.GetMethod("Configure", new[] { configuration.GetType() });
+                    configureMethod?.Invoke(instance, new[] { configuration });
+                }
+            }
+
+            return instance;
         }
         
         private void EnsureSceneDictionary(string sceneName)
