@@ -17,5 +17,20 @@ namespace Nexus.Core.Bootstrap
         public MonoBehaviour monoBehaviourPrefab;
 
         public ScriptableObject configuration;
+        
+        public bool SameAs(ServiceDefinition other)
+        {
+            return serviceName == other.serviceName &&
+                   interfaceType == other.interfaceType &&
+                   implementationType == other.implementationType &&
+                   lifetime == other.lifetime &&
+                   monoBehaviourPrefab == other.monoBehaviourPrefab &&
+                   configuration == other.configuration;
+        }
+        
+        public bool SameInterfaceAs(ServiceDefinition other)
+        {
+            return interfaceType == other.interfaceType;
+        }
     }
 }

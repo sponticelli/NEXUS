@@ -43,7 +43,7 @@ namespace Nexus.Core.Bootstrap
 
         protected async Task RegisterServices()
         {
-            var serviceDefinitions = serviceRegistryAsset.services;
+            var serviceDefinitions = serviceRegistryAsset.GetServices();
 
             // Build the dependency graph
             var dependencyGraph = BuildDependencyGraph(serviceDefinitions);
