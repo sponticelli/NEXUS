@@ -16,3 +16,4 @@ Network of Extensible Unity Systems - A modern Unity game framework
 
 ## Features
 - **[Service Locator](Documentation%7E%2FServiceLocator.md)**
+- **[Scriptable Enums](Documentation%7E%2FScriptableEnums.md)**
