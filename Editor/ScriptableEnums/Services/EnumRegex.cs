@@ -9,9 +9,9 @@ namespace Nexus.ScriptableEnums.Services
     /// </summary>
     public class EnumRegex
     {
-        private const string ENUM_PATTERN = @"public\s+enum\s+{0}\s*\{{\s*{1}\s*\}}";
-        private const string ENUM_VALUE_PATTERN = @"{0}\s*=\s*{1}";
-        private const string NAMESPACE_PATTERN = @"namespace\s+([a-zA-Z_][\w.]*)\s*\{";
+        private const string EnumPattern = @"public\s+enum\s+{0}\s*\{{\s*{1}\s*\}}";
+        private const string EnumValuePattern = @"{0}\s*=\s*{1}";
+        private const string NamespacePattern = @"namespace\s+([a-zA-Z_][\w.]*)\s*\{";
 
         /// <summary>
         /// Checks if the given text contains a matching enum definition
@@ -27,7 +27,7 @@ namespace Nexus.ScriptableEnums.Services
             try
             {
                 var valuesPattern = BuildEnumValuesPattern(type);
-                var pattern = string.Format(ENUM_PATTERN, type.Name, valuesPattern);
+                var pattern = string.Format(EnumPattern, type.Name, valuesPattern);
                 return Regex.IsMatch(text, pattern, RegexOptions.Multiline);
             }
             catch (ArgumentException ex)
@@ -52,23 +52,23 @@ namespace Nexus.ScriptableEnums.Services
             try
             {
                 var valuesPattern = BuildEnumValuesPattern(type);
-                var pattern = string.Format(ENUM_PATTERN, type.Name, valuesPattern);
+                var pattern = string.Format(EnumPattern, type.Name, valuesPattern);
                 
                 // First try to replace within a namespace
-                var namespaceMatch = Regex.Match(text, NAMESPACE_PATTERN);
-                if (namespaceMatch.Success)
-                {
-                    var namespaceName = namespaceMatch.Groups[1].Value;
-                    if (type.Namespace == namespaceName)
-                    {
-                        // Match enum within namespace
-                        pattern = $@"(namespace\s+{Regex.Escape(namespaceName)}\s*{{[\s\S]*?){pattern}([\s\S]*?}})";
-                        return Regex.Replace(text, pattern, $"$1{replacement}$2");
-                    }
-                }
-
+                var namespaceMatch = Regex.Match(text, NamespacePattern);
+                if (!namespaceMatch.Success)
+                    return Regex.Replace(text, pattern, replacement);
+                
+                var namespaceName = namespaceMatch.Groups[1].Value;
+                if (type.Namespace != namespaceName) 
+                    return Regex.Replace(text, pattern, replacement);
+                
+                // Match enum within namespace
                 // If no namespace match or different namespace, try global replace
-                return Regex.Replace(text, pattern, replacement);
+                pattern = $@"(namespace\s+{Regex.Escape(namespaceName)}\s*{{[\s\S]*?){pattern}([\s\S]*?}})";
+                return Regex.Replace(text, pattern, $"$1{replacement}$2");
+
+                
             }
             catch (ArgumentException ex)
             {
@@ -96,7 +96,7 @@ namespace Nexus.ScriptableEnums.Services
                 
                 // Make the = value part optional to support both explicit and implicit values
                 patterns[i] = string.Format(
-                    ENUM_VALUE_PATTERN, 
+                    EnumValuePattern, 
                     Regex.Escape(name), 
                     value
                 ) + "?";
@@ -113,7 +113,7 @@ namespace Nexus.ScriptableEnums.Services
         /// <returns>The namespace, or null if not found</returns>
         public string ExtractNamespace(string text)
         {
-            var match = Regex.Match(text, NAMESPACE_PATTERN);
+            var match = Regex.Match(text, NamespacePattern);
             return match.Success ? match.Groups[1].Value : null;
         }
 
@@ -122,10 +122,7 @@ namespace Nexus.ScriptableEnums.Services
         /// </summary>
         public static bool IsValidIdentifier(string name)
         {
-            if (string.IsNullOrEmpty(name))
-                return false;
-
-            return Regex.IsMatch(name, @"^[a-zA-Z_]\w*$");
+            return !string.IsNullOrEmpty(name) && Regex.IsMatch(name, @"^[a-zA-Z_]\w*$");
         }
 
         /// <summary>
@@ -133,10 +130,7 @@ namespace Nexus.ScriptableEnums.Services
         /// </summary>
         public static bool IsValidEnumValue(string text)
         {
-            if (string.IsNullOrEmpty(text))
-                return false;
-
-            return Regex.IsMatch(text, @"^[a-zA-Z_][\w]*\s*=\s*-?\d+$");
+            return !string.IsNullOrEmpty(text) && Regex.IsMatch(text, @"^[a-zA-Z_][\w]*\s*=\s*-?\d+$");
         }
 
         /// <summary>

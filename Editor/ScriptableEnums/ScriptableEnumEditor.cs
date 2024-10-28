@@ -32,6 +32,15 @@ namespace Nexus.ScriptableEnums
         
         private SerializedProperty _namespaceProperty;
         private SerializedProperty _useCustomNamespaceProperty;
+        
+        private static readonly Dictionary<string, Type> _typeCache = new();
+    
+        // Clear cache on domain reload
+        [InitializeOnLoadMethod]
+        private static void Initialize()
+        {
+            AssemblyReloadEvents.afterAssemblyReload += ClearTypeCache;
+        }
 
         public ScriptableEnumEditor()
         {
@@ -87,18 +96,33 @@ namespace Nexus.ScriptableEnums
         /// </summary>
         public async void RefreshState()
         {
-            _currentState?.OnExit();
+            try 
+            {
+                _currentState?.OnExit();
 
-            var newState = await TryPreviewEnum() 
-                ? ScriptableEnum.EditState.Preview 
-                : ScriptableEnum.EditState.Searching;
+                var newType = await FindExistingEnumType();
+                _currentType = newType;
+        
+                var newState = newType != null
+                    ? ScriptableEnum.EditState.Preview 
+                    : ScriptableEnum.EditState.Searching;
 
-            _scriptableEnum.editState = newState;
-            _currentState = _states[newState];
-            _currentState.OnEnter();
+                _scriptableEnum.editState = newState;
+                _currentState = _states[newState];
+                _currentState.OnEnter();
 
-            _errorMessage = null;
-            _hasUnsavedChanges = false;
+                _errorMessage = null;
+                _hasUnsavedChanges = false;
+        
+                // Force a repaint since we're async
+                Repaint();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error refreshing state: {ex}");
+                _errorMessage = "Failed to refresh enum state";
+                Repaint();
+            }
         }
 
         /// <summary>
@@ -300,27 +324,47 @@ namespace Nexus.ScriptableEnums
             var enumName = _scriptableEnum.EnumName;
             if (string.IsNullOrEmpty(enumName)) return null;
 
-            // Try with namespace if available
             var fullName = _scriptableEnum.GetEffectiveNamespace() is string ns 
                 ? $"{ns}.{enumName}" 
                 : enumName;
 
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            // Check cache first
+            if (_typeCache.TryGetValue(fullName, out var cachedType))
             {
-                // Try full name first
-                var type = assembly.GetType(fullName);
-                if (type?.IsEnum == true) return type;
-
-                // Fall back to searching by simple name if not found
-                if (_scriptableEnum.UseCustomNamespace) continue;
-            
-                type = assembly.GetTypes().FirstOrDefault(t => t.Name == enumName && t.IsEnum);
-                if (type != null) return type;
+                return cachedType;
             }
 
-            return null;
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        
+            var foundType = await Task.Run(() =>
+            {
+                foreach (var assembly in assemblies)
+                {
+                    // Try full name first
+                    var type = assembly.GetType(fullName);
+                    if (type?.IsEnum == true) return type;
+
+                    // Fall back to searching by simple name if not found
+                    if (_scriptableEnum.UseCustomNamespace) continue;
+            
+                    type = assembly.GetTypes().FirstOrDefault(t => t.Name == enumName && t.IsEnum);
+                    if (type != null) return type;
+                }
+
+                return null;
+            });
+
+            // Cache the result (even if null)
+            _typeCache[fullName] = foundType;
+        
+            return foundType;
         }
 
+        // Add method to clear cache if needed
+        private static void ClearTypeCache()
+        {
+            _typeCache.Clear();
+        }
 
         /// <summary>
         /// Generates the enum script content
