@@ -29,6 +29,7 @@ namespace Nexus.Core.ServiceLocation
 
             try
             {
+                Debug.Log($"Creating instance of {type.Name}");
                 object instance = isMonoBehaviour
                     ? CreateMonoBehaviourInstance(type)
                     : CreateRegularInstance(type);
@@ -51,9 +52,46 @@ namespace Nexus.Core.ServiceLocation
 
         private object CreateMonoBehaviourInstance(Type type)
         {
-            GameObject serviceObject = new GameObject($"{type.Name}Service");
+            // Get the ServiceLocator instance
+            var serviceLocator = ServiceLocator.Instance;
+            if (serviceLocator == null)
+            {
+                throw new InvalidOperationException("ServiceLocator instance not found");
+            }
+
+            // Format the service name
+            var serviceName = type.Name;
+            if (!serviceName.EndsWith("Service"))
+            {
+                serviceName += "Service";
+            }
+            
+            Debug.Log($"Creating MonoBehaviour instance of {serviceName}");
+
+            // Check if a GameObject with this name already exists under ServiceLocator
+            Transform existingService = serviceLocator.transform.Find(serviceName);
+            if (existingService != null)
+            {
+                var existingComponent = existingService.GetComponent(type);
+                if (existingComponent != null)
+                {
+                    Debug.Log($"Found existing instance of {serviceName}");
+                    return existingComponent;
+                }
+                
+                // If GameObject exists but doesn't have the right component, destroy it
+                GameObject.Destroy(existingService.gameObject);
+            }
+            
+            // Create a new GameObject as a child of the ServiceLocator
+            var serviceObject = new GameObject(serviceName);
+            serviceObject.transform.SetParent(serviceLocator.transform);
+            Debug.Log($"Created new instance of {serviceName} as child of ServiceLocator");
+
+            // Add the component and inject dependencies
             var instance = serviceObject.AddComponent(type);
             dependencyInjector.InjectProperties(instance);
+            
             return instance;
         }
 

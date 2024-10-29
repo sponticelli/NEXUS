@@ -120,5 +120,10 @@ namespace Nexus.Core.ServiceLocation
         {
             registry.RegisterInstance<TInterface>(instance, lifetime);
         }
+        
+        public override string ToString()
+        {
+            return registry.ToString();
+        }
     }
 }
