@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using Nexus.Core.ServiceLocation;
 using UnityEngine;
 using Nexus.Core.Services;
 
@@ -16,56 +17,22 @@ using UnityEditor;
 namespace Nexus.Timing
 {
     [ServiceImplementation]
-    public class NetworkTimeService : MonoBehaviour, INetworkTimeService
+    public class NetworkTimeService : MonoBehaviour, INetworkTimeService, IConfigurable<NetworkTimeServiceConfig>
     {
+        private NetworkTimeServiceConfig _config;
+        
 #if UNITY_EDITOR
-        [Header("[Unity Editor Only]")]
-        [Tooltip("Show messages to indicate the status of the network time in the debug log.")]
-        [SerializeField]
-        private bool _showDebugMessages = true;
-
-        [Tooltip("Show warnings to indicate an issue that could cause the app to not function correctly.")]
-        [SerializeField]
-        private bool _showDebugWarnings = true;
-
         private bool _applicationPaused;
 #endif
 
-        // Network communication and sync settings.
-        private const int
-            NtpServerCooldownSeconds = 64; // Time to wait before requesting time from same NTP server (64 to 1024).
-
-        private const int NetworkTimeoutMilliseconds = 2000; // Time to wait on a NTP server response before canceling.
-
-        private const int
-            NtpRequestMaxFails = 2; // Allowed timeouts to a NTP server before excluding it as a request option.
-
-        private const int
-            AllowedOffSyncSeconds = 1; // Allowed time change between network time and system time each update frame.
-
-        private const int
-            AllowedPauseSeconds = 10; // Allowed time to be paused before requiring a resync to a NTP server.
-
-        private const float
-            WaitForNetworkMinSeconds =
-                1f; // Minimum time to wait before trying to connect to a NTP server after all connections failed.
-
-        private const float
-            WaitForNetworkMaxSeconds =
-                60f; // Maximum time to wait before trying to connect to a NTP server as each failed attempt increases the wait time by 1 second.
-
-        private const string
-            SaveNtpTimesName = "NextNtpTimes"; // PlayerPref name to save next request times for NTP servers.
+        public string NtpTimesKey { get; set; } = "NEXUS_NTP_TIMES";
 
         // NTP message data settings.
         private const int NtpUdpPort = 123; // Standard NTP port.
         private const int NtpMessageBytes = 48; // Standard NTP message size.
         private const byte NtpRequestHeader = 0x1B; // Standard NTP message header.
         private const int NtpSecondsOffsetByte = 40; // Standard byte position for current time seconds in NTP message.
-
-        private const int
-            NtpFractionOfSecondOffsetByte =
-                44; // Standard byte position for current time fraction of seconds in NTP message.
+        private const int NtpFractionOfSecondOffsetByte = 44; // Standard byte position for current time fraction of seconds in NTP message.
 
         private readonly (string DomainNameAddress, DateTime NextRequestTime, int FailCount)[] _ntpServers =
             new (string, DateTime, int)[9]
@@ -81,12 +48,8 @@ namespace Nexus.Timing
                 ("ntp.ubuntu.com", DateTime.MinValue, 0)
             };
 
-        // Network time management.
-        private readonly DateTime
-            _epochTime =
-                new(1900, 1, 1, 0, 0, 0,
-                    DateTimeKind.Utc); // Standard beginning of NTP time. New epoch on February 7, 2036.
-
+        // Standard beginning of NTP time. New epoch on February 7, 2036.
+        private readonly DateTime _epochTime = new(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc); 
         private DateTime _networkTimeUtc; // Current network time for the app to use.
         private DateTime _appPauseTime; // System time the app was paused at.
         private TimeSpan _timeDifferenceUtc; // Difference between the NTP time and system time.
@@ -98,15 +61,13 @@ namespace Nexus.Timing
         {
             get
             {
-                // Debug log messages.
 #if UNITY_EDITOR
-                if (_showDebugWarnings)
+                if (_config.showDebugWarnings)
                 {
                     if (_networkTimeUtc == DateTime.MinValue)
                         Debug.LogWarning("Network time has not been set. The value is DateTime.MinValue.");
                     if (!_timeInSync)
-                        Debug.LogWarning(
-                            "Network time is not in sync. Check IsTimeInSync before getting the network time.");
+                        Debug.LogWarning("Network time is not in sync. Check IsTimeInSync before getting the network time.");
                 }
 #endif
                 return _networkTimeUtc;
@@ -116,12 +77,19 @@ namespace Nexus.Timing
         public bool IsTimeInSync => _timeInSync;
 
         public bool IsInitialized { get; private set; }
+        
+        public void Configure(NetworkTimeServiceConfig configuration)
+        {
+            _config = configuration;
+            Debug.Log("NetworkTimeService configured with custom settings");
+        }
+
 
         public void ForceTimeResync()
         {
             _timeInSync = false;
             if (_currentlySyncingTime) return;
-            StartCoroutine(SyncNetworkTimeCoroutine(WaitForNetworkMinSeconds));
+            StartCoroutine(SyncNetworkTimeCoroutine(_config.waitForNetworkMinSeconds));
         }
 
         public async Task InitializeAsync()
@@ -147,7 +115,7 @@ namespace Nexus.Timing
 
         private IEnumerator InitialSyncCoroutine()
         {
-            var syncCoroutine = SyncNetworkTimeCoroutine(WaitForNetworkMinSeconds);
+            var syncCoroutine = SyncNetworkTimeCoroutine(_config.waitForNetworkMinSeconds);
             yield return syncCoroutine;
 
             _initializationTask.SetResult(true);
@@ -180,10 +148,10 @@ namespace Nexus.Timing
             DateTime nextNetworkTimeUtc = systemTimeUtc.Add(_timeDifferenceUtc);
 
             // Time has changed too much and is now out of sync.
-            if (Mathf.Abs((float)(_networkTimeUtc - nextNetworkTimeUtc).TotalSeconds) > AllowedOffSyncSeconds)
+            if (Mathf.Abs((float)(_networkTimeUtc - nextNetworkTimeUtc).TotalSeconds) > _config.allowedOffSyncSeconds)
             {
                 _timeInSync = false;
-                StartCoroutine(SyncNetworkTimeCoroutine(WaitForNetworkMinSeconds));
+                StartCoroutine(SyncNetworkTimeCoroutine(_config.waitForNetworkMinSeconds));
                 return;
             }
 
@@ -207,7 +175,7 @@ namespace Nexus.Timing
             {
                 DateTime systemTime = DateTime.UtcNow;
                 double appPauseForSeconds = (systemTime - _appPauseTime).TotalSeconds;
-                if (appPauseForSeconds < 0 || appPauseForSeconds > AllowedPauseSeconds)
+                if (appPauseForSeconds < 0 || appPauseForSeconds > _config.allowedPauseSeconds)
                     _timeInSync = false;
                 else
                     _networkTimeUtc = systemTime.Add(_timeDifferenceUtc);
@@ -290,13 +258,13 @@ namespace Nexus.Timing
         {
             DateTime systemTimeUtc = DateTime.UtcNow;
             return systemTimeUtc < _ntpServers[serverIndex].NextRequestTime ||
-                   _ntpServers[serverIndex].FailCount > NtpRequestMaxFails;
+                   _ntpServers[serverIndex].FailCount > _config.ntpRequestMaxFails;
         }
 
         private void UpdateServerRequestTime(int serverIndex)
         {
             _ntpServers[serverIndex].NextRequestTime =
-                DateTime.UtcNow.AddSeconds(NtpServerCooldownSeconds);
+                DateTime.UtcNow.AddSeconds(_config.ntpServerCooldownSeconds);
         }
 
         private IEnumerator<bool> TryGetTimeFromServer(int serverIndex)
@@ -350,45 +318,44 @@ namespace Nexus.Timing
 
         private float UpdateWaitTime(float currentWaitTime)
         {
-            if (currentWaitTime < WaitForNetworkMaxSeconds)
+            if (currentWaitTime < _config.waitForNetworkMaxSeconds)
             {
-                return Math.Min(currentWaitTime + 1f, WaitForNetworkMaxSeconds);
+                return Math.Min(currentWaitTime + 1f, _config.waitForNetworkMaxSeconds);
             }
 
             return currentWaitTime;
         }
 
-#if UNITY_EDITOR
+
         private void LogSyncStartMessage(float waitTime)
         {
-            if (_showDebugMessages)
-                Debug.Log("NetworkTimeManager: Getting time from a NTP server.");
-            if (_showDebugWarnings && waitTime < 1f)
+            if (_config.showDebugMessages)
+                Debug.Log("NetworkTimeService: Getting time from a NTP server.");
+            if (_config.showDebugWarnings && waitTime < 1f)
                 Debug.LogWarning(
-                    "NetworkTimeManager: The starting seconds to wait between sync attempts is less than 1.");
+                    "NetworkTimeService: The starting seconds to wait between sync attempts is less than 1.");
         }
 
         private void LogFailedRequest(int serverIndex)
         {
-            if (_showDebugMessages)
+            if (_config.showDebugMessages)
                 Debug.Log(
-                    $"NetworkTimeManager: NTP request to \"{_ntpServers[serverIndex].DomainNameAddress}\" failed.");
+                    $"NetworkTimeService: NTP request to \"{_ntpServers[serverIndex].DomainNameAddress}\" failed.");
         }
 
         private void LogSuccessfulRequest(int serverIndex, DateTime ntpTime)
         {
-            if (_showDebugMessages)
+            if (_config.showDebugMessages)
                 Debug.Log(
-                    $"NetworkTimeManager: Received {ntpTime} from \"{_ntpServers[serverIndex].DomainNameAddress}\".");
+                    $"NetworkTimeService: Received {ntpTime} from \"{_ntpServers[serverIndex].DomainNameAddress}\".");
         }
 
         private void LogSyncFailureMessage(float waitTime)
         {
-            if (_showDebugWarnings)
-                Debug.LogWarning("NetworkTimeManager: Failed to update network time from any NTP servers. "
+            if (_config.showDebugWarnings)
+                Debug.LogWarning("NetworkTimeService: Failed to update network time from any NTP servers. "
                                  + $"Retry in {waitTime} {(waitTime == 1f ? "second" : "seconds")}.");
         }
-#endif
 
         private async Task<DateTime> GetTimeFromNtpServerAsync(string ntpServerDnsAddress)
         {
@@ -428,7 +395,7 @@ namespace Nexus.Timing
             if (addresses.Length == 0)
             {
                 throw new InvalidOperationException(
-                    $"NetworkTimeManager: No IP address found for \"{ntpServerDnsAddress}\".");
+                    $"NetworkTimeService: No IP address found for \"{ntpServerDnsAddress}\".");
             }
 
             return addresses;
@@ -437,7 +404,7 @@ namespace Nexus.Timing
         private UdpClient CreateUdpClient()
         {
             var client = new UdpClient();
-            client.Client.ReceiveTimeout = NetworkTimeoutMilliseconds;
+            client.Client.ReceiveTimeout = _config.networkTimeoutMilliseconds;
             return client;
         }
 
@@ -467,7 +434,7 @@ namespace Nexus.Timing
             if (!serverAddresses.Any(ipAddress => ipAddress.Equals(response.RemoteEndPoint.Address)))
             {
                 throw new InvalidOperationException(
-                    $"NetworkTimeManager: Received message IP address does not match \"{ntpServerDnsAddress}\".");
+                    $"NetworkTimeService: Received message IP address does not match \"{ntpServerDnsAddress}\".");
             }
         }
 
@@ -480,7 +447,7 @@ namespace Nexus.Timing
             if (!isValidSize || !isValidVersion || !isValidMode)
             {
                 throw new InvalidOperationException(
-                    "NetworkTimeManager: Received message is not a valid size, type, or version for the expected NTP data.");
+                    "NetworkTimeService: Received message is not a valid size, type, or version for the expected NTP data.");
             }
         }
 
@@ -489,17 +456,17 @@ namespace Nexus.Timing
             if (((ntpData[0] >> 6) & 0x03) == 3)
             {
                 throw new InvalidOperationException(
-                    $"NetworkTimeManager: NTP server \"{ntpServerDnsAddress}\" is not synchronized.");
+                    $"NetworkTimeService: NTP server \"{ntpServerDnsAddress}\" is not synchronized.");
             }
         }
 
         private void ValidateRoundTripTime(DateTime sendTime, DateTime receiveTime)
         {
             TimeSpan roundTripTime = receiveTime - sendTime;
-            if (roundTripTime.TotalMilliseconds > NetworkTimeoutMilliseconds || roundTripTime.TotalMilliseconds < 0)
+            if (roundTripTime.TotalMilliseconds > _config.networkTimeoutMilliseconds || roundTripTime.TotalMilliseconds < 0)
             {
                 throw new InvalidOperationException(
-                    "NetworkTimeManager: The system time changed too much while waiting on a NTP response.");
+                    "NetworkTimeService: The system time changed too much while waiting on a NTP response.");
             }
         }
 
@@ -551,9 +518,9 @@ namespace Nexus.Timing
 
                 // Debug log messages.
 #if UNITY_EDITOR
-                if (_showDebugWarnings)
+                if (_config.showDebugWarnings)
                     Debug.LogWarning(
-                        $"NetworkTimeManager: Only 12 of the request times for {_ntpServers.Length} NTP servers were saved. "
+                        $"NetworkTimeService: Only 12 of the request times for {_ntpServers.Length} NTP servers were saved. "
                         + "PlayerPref strings can be a max of 243 characters for Windows registry.");
 #endif
             }
@@ -564,21 +531,23 @@ namespace Nexus.Timing
                 requestTimesToSave.Append(_ntpServers[i].NextRequestTime.Ticks.ToString("D20"));
 
             // Save the next request times.
-            PlayerPrefs.SetString(SaveNtpTimesName, requestTimesToSave.ToString());
+            PlayerPrefs.SetString(NtpTimesKey, requestTimesToSave.ToString());
             PlayerPrefs.Save();
 
             // Debug log messages.
 #if UNITY_EDITOR
-            if (_showDebugMessages)
+            if (_config.showDebugMessages)
             {
                 StringBuilder debugMessage = new();
-                debugMessage.Append($"NetworkTimeManager: Saved request times for NTP servers: {requestTimesToSave}");
+                debugMessage.Append($"NetworkTimeService: Saved request times for NTP servers: {requestTimesToSave}");
                 for (int i = 0; i < ntpServerCount; i++)
                     debugMessage.Append($"\n{_ntpServers[i].DomainNameAddress} : {_ntpServers[i].NextRequestTime}");
                 Debug.Log(debugMessage);
             }
 #endif
         }
+
+        
 
         private void LoadRequestTimesForNtpServers()
         {
@@ -599,7 +568,7 @@ namespace Nexus.Timing
 
         private string LoadSavedRequestTimes()
         {
-            return PlayerPrefs.GetString(SaveNtpTimesName, string.Empty);
+            return PlayerPrefs.GetString(NtpTimesKey, string.Empty);
         }
 
         private int GetValidServerCount()
@@ -621,7 +590,7 @@ namespace Nexus.Timing
 
         private void LogValidationError()
         {
-            string errorMessage = "NetworkTimeManager: Failed to load NTP server request times.";
+            string errorMessage = "NetworkTimeService: Failed to load NTP server request times.";
 #if UNITY_EDITOR
             errorMessage += " The read string value is not the correct length.";
 #endif
@@ -661,14 +630,14 @@ namespace Nexus.Timing
         private bool IsRequestTimeValid(DateTime requestTime)
         {
             var timeUntilRequest = (requestTime - DateTime.UtcNow).TotalSeconds;
-            return timeUntilRequest <= NtpServerCooldownSeconds;
+            return timeUntilRequest <= _config.ntpServerCooldownSeconds;
         }
 
         private void LogInvalidRequestTimeError()
         {
-            string errorMessage = "NetworkTimeManager: Failed to load a NTP server request time.";
+            string errorMessage = "NetworkTimeService: Failed to load a NTP server request time.";
 #if UNITY_EDITOR
-            errorMessage += " The read time is greater than \"NtpServerCooldownSeconds\".";
+            errorMessage += $" The read time is greater than {_config.ntpServerCooldownSeconds}.";
 #endif
             Debug.LogError(errorMessage);
         }
@@ -676,7 +645,7 @@ namespace Nexus.Timing
 #if UNITY_EDITOR
         private void LogLoadedRequestTimes(string savedRequestTimes, int serverCount)
         {
-            if (!_showDebugMessages)
+            if (!_config.showDebugMessages)
                 return;
 
             var debugMessage = CreateDebugMessage(savedRequestTimes, serverCount);
@@ -686,7 +655,7 @@ namespace Nexus.Timing
         private string CreateDebugMessage(string savedRequestTimes, int serverCount)
         {
             var debugMessage = new StringBuilder();
-            debugMessage.Append($"NetworkTimeManager: Read request times for NTP servers: {savedRequestTimes}");
+            debugMessage.Append($"NetworkTimeService: Read request times for NTP servers: {savedRequestTimes}");
 
             for (int i = 0; i < serverCount; i++)
             {
