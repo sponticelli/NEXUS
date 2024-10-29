@@ -19,4 +19,5 @@ Network of Extensible Unity Systems - A modern Unity game framework
 - **[Scriptable Enums](Documentation%7E%2FScriptableEnums.md)**
 
 ### Services
+- **[Pooling Service](Documentation%7E%2FPoolingService.md)** - Flexible object pooling system
 - **[Network Time Service](Documentation%7E%2FNetworkTimeService.md)** - Automatic time synchronization with multiple NTP servers
