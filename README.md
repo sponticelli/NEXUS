@@ -20,4 +20,5 @@ Network of Extensible Unity Systems - A modern Unity game framework
 
 ### Services
 - **[Pooling Service](Documentation%7E%2FPoolingService.md)** - Flexible object pooling system
+- **[Music Service](Documentation%7E/MusicService.md)** - Background music playback with playlists and crossfading
 - **[Network Time Service](Documentation%7E%2FNetworkTimeService.md)** - Automatic time synchronization with multiple NTP servers
