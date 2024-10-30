@@ -17,7 +17,7 @@ namespace Nexus.Audio
         float CurrentTrackProgress { get; } // 0-1 range
         
         void SetPlaylist(MusicPlaylist playlist, bool autoPlay = false);
-        void PlayTrack(string trackName, bool fadeIn = true);
+        void PlayTrack(string trackId, bool fadeIn = true);
         void PlayTrack(int trackIndex, bool fadeIn = true);
         void PlayTrack(AudioClip clip, bool fadeIn = true);
         void PlayNext(bool fadeTransition = true);

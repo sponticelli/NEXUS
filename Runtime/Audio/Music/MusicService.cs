@@ -172,18 +172,18 @@ namespace Nexus.Audio
             }
         }
 
-        public void PlayTrack(string trackName, bool fadeIn = true)
+        public void PlayTrack(string trackId, bool fadeIn = true)
         {
             if (!IsInitialized || currentPlaylist?.Tracks == null) return;
 
-            var trackIndex = currentPlaylist.FindTrackIndex(trackName);
+            var trackIndex = currentPlaylist.FindTrackIndexById(trackId);
             if (trackIndex >= 0)
             {
                 PlayTrack(trackIndex, fadeIn);
             }
             else
             {
-                Debug.LogWarning($"Track '{trackName}' not found in the current playlist.");
+                Debug.LogWarning($"Track with ID '{trackId}' not found in the current playlist.");
             }
         }
 
