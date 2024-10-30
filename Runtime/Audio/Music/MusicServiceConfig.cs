@@ -32,5 +32,10 @@ namespace Nexus.Audio
         public bool pauseOnFocusLost = true;
         public int maxHistorySize = 10;
         public bool logDebugMessages = false;
+        
+
+        [Header("Debug Settings")]
+        [Tooltip("Enable detailed debug logging")]
+        public bool enableDebugLogging = true;
     }
 }

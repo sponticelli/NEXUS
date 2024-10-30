@@ -126,10 +126,26 @@ namespace Nexus.Audio
 
         private void ConfigureAudioSource(AudioSource source)
         {
+            if (source == null)
+            {
+                Debug.LogError("Attempted to configure null AudioSource");
+                return;
+            }
+
             source.playOnAwake = false;
-            source.loop = true;
+            source.loop = true; // Ensure looping is explicitly set
             source.outputAudioMixerGroup = config.mixerGroup;
             source.priority = 0; // Highest priority
+            source.spatialBlend = 0f; // Pure 2D
+            source.reverbZoneMix = 0f; // No reverb
+            source.dopplerLevel = 0f; // No doppler effect
+            source.rolloffMode = AudioRolloffMode.Linear;
+            source.minDistance = 1f;
+            source.maxDistance = 500f;
+
+            // Validate configuration
+            Debug.Log(
+                $"Configured AudioSource - Loop: {source.loop}, Priority: {source.priority}, Volume: {source.volume}");
         }
 
         public Task WaitForInitialization()
@@ -268,8 +284,8 @@ namespace Nexus.Audio
                 return;
             }
 
-            Debug.Log(
-                $"PlayTrackInternal executing for {trackInfo?.DisplayName}, audioSources: {(audioSources != null ? audioSources.Length.ToString() : "null")}");
+            Debug.Log($"=== Starting PlayTrackInternal ===");
+            Debug.Log($"Track: {trackInfo?.DisplayName}, Fade: {fadeIn}");
 
             try
             {
@@ -279,12 +295,7 @@ namespace Nexus.Audio
                     return;
                 }
 
-                if (audioSources == null)
-                {
-                    Debug.LogError("AudioSources array is null");
-                    return;
-                }
-
+                // Calculate next source index
                 int nextSourceIndex = activeSourceIndex < 0 ? 0 : (activeSourceIndex + 1) % audioSources.Length;
                 var nextSource = audioSources[nextSourceIndex];
 
@@ -294,19 +305,41 @@ namespace Nexus.Audio
                     return;
                 }
 
-                Debug.Log($"Setting up next source at index {nextSourceIndex}");
-                nextSource.clip = trackInfo.Clip;
-                nextSource.volume = fadeIn ? 0f : volume * trackInfo.VolumeMultiplier;
-
+                // Stop any existing fade
                 if (fadeCoroutine != null)
                 {
                     StopCoroutine(fadeCoroutine);
                     fadeCoroutine = null;
                 }
 
-                Debug.Log("Starting playback");
-                nextSource.Play();
+                // Configure the next source
+                nextSource.clip = trackInfo.Clip;
+                nextSource.loop = true; // Ensure loop is set
+                float targetVolume = volume * trackInfo.VolumeMultiplier;
 
+                if (!fadeIn)
+                {
+                    nextSource.volume = targetVolume;
+                    Debug.Log($"Set immediate volume: {targetVolume}");
+                }
+                else
+                {
+                    nextSource.volume = 0f;
+                    Debug.Log("Set initial volume to 0 for fade");
+                }
+
+                // Start playback
+                nextSource.Play();
+                Debug.Log($"Started playback on source {nextSourceIndex}");
+
+                // Verify playback started
+                if (!nextSource.isPlaying)
+                {
+                    Debug.LogError("Failed to start playback!");
+                    return;
+                }
+
+                // Handle fade if needed
                 if (fadeIn)
                 {
                     fadeCoroutine = StartCoroutine(CrossfadeAudioSources(
@@ -316,9 +349,14 @@ namespace Nexus.Audio
                         trackInfo.VolumeMultiplier
                     ));
                 }
-                else if (activeSourceIndex >= 0 && activeSourceIndex < audioSources.Length)
+                else if (activeSourceIndex >= 0)
                 {
-                    audioSources[activeSourceIndex]?.Stop();
+                    var oldSource = audioSources[activeSourceIndex];
+                    if (oldSource != null)
+                    {
+                        oldSource.Stop();
+                        oldSource.volume = 0f;
+                    }
                 }
 
                 activeSourceIndex = nextSourceIndex;
@@ -333,9 +371,9 @@ namespace Nexus.Audio
             catch (Exception ex)
             {
                 Debug.LogError($"Error in PlayTrackInternal: {ex}");
-                throw;
             }
         }
+
 
         public void PlayNext(bool fadeTransition = true)
         {
@@ -548,22 +586,28 @@ namespace Nexus.Audio
             float startVolume = fromSource?.volume ?? 0f;
             float targetVolume = volume * targetVolumeMultiplier;
 
+            // Set initial volume for new source to 0
+            toSource.volume = 0f;
+
             while (elapsedTime < duration)
             {
                 elapsedTime += Time.deltaTime;
-                float t = elapsedTime / duration;
+                float t = Mathf.Clamp01(elapsedTime / duration);
 
                 // Smoothstep for more natural fading
                 float smoothT = t * t * (3f - 2f * t);
 
-                if (fromSource != null)
+                if (fromSource != null && fromSource.isPlaying)
+                {
                     fromSource.volume = Mathf.Lerp(startVolume, 0f, smoothT);
+                }
 
                 toSource.volume = Mathf.Lerp(0f, targetVolume, smoothT);
 
                 yield return null;
             }
 
+            // Ensure final volumes are set exactly
             if (fromSource != null)
             {
                 fromSource.Stop();
@@ -571,6 +615,8 @@ namespace Nexus.Audio
             }
 
             toSource.volume = targetVolume;
+
+            Debug.Log($"Crossfade complete. Final volume: {toSource.volume}, Target volume: {targetVolume}");
 
             fadeCoroutine = null;
             isFading = false;
@@ -585,13 +631,16 @@ namespace Nexus.Audio
             while (elapsedTime < duration)
             {
                 elapsedTime += Time.deltaTime;
-                float t = elapsedTime / duration;
+                float t = Mathf.Clamp01(elapsedTime / duration);
 
                 float smoothT = t * t * (3f - 2f * t);
                 audioSources[activeSourceIndex].volume = Mathf.Lerp(startVolume, 0f, smoothT);
 
                 yield return null;
             }
+
+            // Ensure final volume is exactly 0
+            audioSources[activeSourceIndex].volume = 0f;
 
             if (pause)
                 PauseImmediate();
@@ -608,10 +657,13 @@ namespace Nexus.Audio
             float elapsedTime = 0;
             float targetVolume = volume * volumeMultiplier;
 
+            // Set initial volume to 0
+            audioSources[activeSourceIndex].volume = 0f;
+
             while (elapsedTime < duration)
             {
                 elapsedTime += Time.deltaTime;
-                float t = elapsedTime / duration;
+                float t = Mathf.Clamp01(elapsedTime / duration);
 
                 float smoothT = t * t * (3f - 2f * t);
                 audioSources[activeSourceIndex].volume = Mathf.Lerp(0f, targetVolume, smoothT);
@@ -619,7 +671,12 @@ namespace Nexus.Audio
                 yield return null;
             }
 
+            // Ensure final volume is set exactly
             audioSources[activeSourceIndex].volume = targetVolume;
+
+            Debug.Log(
+                $"Fade in complete. Final volume: {audioSources[activeSourceIndex].volume}, Target volume: {targetVolume}");
+
             fadeCoroutine = null;
             isFading = false;
             OnPlaybackStateChanged?.Invoke(true);
@@ -630,19 +687,35 @@ namespace Nexus.Audio
             isFading = true;
             float elapsedTime = 0;
 
+            // Get the current track's volume multiplier
+            float volumeMultiplier = 1f;
+            if (currentPlaylist?.Tracks != null && currentTrackIndex >= 0)
+            {
+                volumeMultiplier = currentPlaylist.Tracks[currentTrackIndex].volumeMultiplier;
+            }
+
             while (elapsedTime < duration)
             {
                 elapsedTime += Time.deltaTime;
-                float t = elapsedTime / duration;
+                float t = Mathf.Clamp01(elapsedTime / duration);
 
                 volume = Mathf.Lerp(fromVolume, toVolume, t);
-                UpdateVolume();
+
+                // Apply the volume with multiplier to the active source
+                if (activeSourceIndex >= 0 && activeSourceIndex < audioSources.Length)
+                {
+                    audioSources[activeSourceIndex].volume = volume * volumeMultiplier;
+                }
 
                 yield return null;
             }
 
+            // Ensure final volume is set exactly
             volume = toVolume;
-            UpdateVolume();
+            if (activeSourceIndex >= 0 && activeSourceIndex < audioSources.Length)
+            {
+                audioSources[activeSourceIndex].volume = volume * volumeMultiplier;
+            }
 
             fadeCoroutine = null;
             isFading = false;
@@ -650,40 +723,118 @@ namespace Nexus.Audio
 
         private void UpdateVolume()
         {
-            if (currentPlaylist?.Tracks == null || currentTrackIndex < 0) return;
+            if (currentPlaylist?.Tracks == null || currentTrackIndex < 0 || activeSourceIndex < 0) return;
 
             float trackMultiplier = currentPlaylist.Tracks[currentTrackIndex].volumeMultiplier;
+            float targetVolume = volume * trackMultiplier;
 
-            foreach (var source in audioSources)
+            var source = audioSources[activeSourceIndex];
+            if (source != null && source.isPlaying)
             {
-                if (source.isPlaying)
-                {
-                    source.volume = volume * trackMultiplier;
-                }
+                source.volume = targetVolume;
+                Debug.Log($"Updated volume to {targetVolume} (base: {volume}, multiplier: {trackMultiplier})");
             }
         }
 
         private IEnumerator MonitorPlayback()
         {
+            Debug.Log("Starting playback monitor");
+            var checkInterval = 0.1f; // Check every 100ms for more responsive monitoring
+            var endThreshold = 0.1f; // Time before end to consider for track completion
+
             while (true)
             {
                 if (isPlaying && !isPaused && !isFading && activeSourceIndex >= 0)
                 {
                     var source = audioSources[activeSourceIndex];
-                    if (!source.isPlaying ||
-                        (source.clip != null && source.time >= source.clip.length - 0.1f))
+
+                    if (source != null)
                     {
-                        if (TryGetTrackInfo(out var trackInfo))
+                        // Ensure loop setting persists
+                        if (!source.loop)
                         {
-                            OnTrackEnded?.Invoke(trackInfo);
+                            Debug.LogWarning("Loop setting was disabled - re-enabling");
+                            source.loop = true;
                         }
 
-                        PlayNext();
+                        // Log current state
+                        if (config.logDebugMessages)
+                        {
+                            LogPlaybackState(source);
+                        }
+
+                        // Check if source actually playing
+                        if (!source.isPlaying)
+                        {
+                            Debug.LogWarning(
+                                $"Source stopped playing unexpectedly - Track: {CurrentTrackName}, Time: {source.time:F2}");
+
+                            // Try to recover playback
+                            if (source.clip != null)
+                            {
+                                Debug.Log("Attempting to resume playback");
+                                source.Play();
+                                source.time = 0; // Start from beginning
+                                yield return new WaitForSeconds(checkInterval);
+
+                                if (!source.isPlaying)
+                                {
+                                    Debug.LogError("Failed to resume playback - trying next track");
+                                    HandleTrackCompletion();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Validate volume
+                            if (Math.Abs(source.volume) < float.Epsilon)
+                            {
+                                Debug.LogWarning("Volume is zero - restoring volume");
+                                UpdateVolume();
+                            }
+
+                            // Only check for track completion if not looping
+                            if (!currentPlaylist.LoopPlaylist && source.time >= (source.clip.length - endThreshold))
+                            {
+                                Debug.Log("Track completed naturally");
+                                HandleTrackCompletion();
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogError($"Null audio source at index {activeSourceIndex}");
                     }
                 }
 
-                yield return new WaitForSeconds(0.1f);
+                yield return new WaitForSeconds(checkInterval);
             }
+        }
+
+        private void HandleTrackCompletion()
+        {
+            if (TryGetTrackInfo(out var trackInfo))
+            {
+                OnTrackEnded?.Invoke(trackInfo);
+            }
+
+            if (currentPlaylist?.LoopPlaylist == true ||
+                (currentTrackIndex + 1 < currentPlaylist?.TrackCount))
+            {
+                PlayNext(true);
+            }
+            else
+            {
+                Stop(true);
+            }
+        }
+
+        private void LogPlaybackState(AudioSource source)
+        {
+            Debug.Log($"Playback State - Track: {CurrentTrackName}" +
+                      $"\nPlaying: {source.isPlaying}, Time: {source.time:F2}/{source.clip?.length:F2}" +
+                      $"\nVolume: {source.volume:F3}, Loop: {source.loop}" +
+                      $"\nMuted: {source.mute}, Enabled: {source.enabled}");
         }
 
         private void RestoreLastPlayedTrack()
