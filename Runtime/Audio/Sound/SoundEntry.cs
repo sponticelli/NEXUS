@@ -32,6 +32,20 @@ namespace Nexus.Audio
         [Range(0f, 1f)]
         private float defaultVolume = 1f;
         public float DefaultVolume => defaultVolume;
+        
+        [SerializeField]
+        [Range(-3f, 3f)]
+        private float pitchMin = 1f;
+        public float PitchMin => pitchMin;
+
+        [SerializeField]
+        [Range(-3f, 3f)]
+        private float pitchMax = 1f;
+        public float PitchMax => pitchMax;
+
+        [SerializeField]
+        private bool randomizePitch;
+        public bool RandomizePitch => randomizePitch;
 
         [SerializeField]
         private bool spatialize;
@@ -50,5 +64,7 @@ namespace Nexus.Audio
         [SerializeField]
         private List<string> tags = new List<string>();
         public IReadOnlyList<string> Tags => tags.AsReadOnly();
+        
+        
     }
 }

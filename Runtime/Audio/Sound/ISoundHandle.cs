@@ -14,5 +14,8 @@ namespace Nexus.Audio
         void Resume(bool fade = true);
         void SetVolume(float volume, bool fade = true);
         void SetPosition(Vector3 position);
+        
+        float Pitch { get; }
+        void SetPitch(float pitch);
     }
 }

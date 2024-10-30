@@ -4,6 +4,7 @@ using System.Text;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using Nexus.Extensions;
 
 namespace Nexus.Audio
 {
@@ -150,15 +151,6 @@ namespace Nexus.Audio
                 .Replace(" ", "_")
                 .Replace("-", "_")
                 .ToUpperInvariant();
-        }
-    }
-
-    // Extension method for converting single object to IEnumerable
-    public static class ObjectExtensions
-    {
-        public static IEnumerable<T> Yield<T>(this T item)
-        {
-            if (item != null) yield return item;
         }
     }
 }

@@ -35,6 +35,8 @@ namespace Nexus.Audio
         public event Action<float> OnUIVolumeChanged;
         public event Action<float> OnSFXVolumeChanged;
         public event Action<float> OnEnvironmentVolumeChanged;
+        
+        public SoundLibrary CurrentLibrary => config?.soundLibrary;
 
         public void Configure(SoundServiceConfig configuration)
         {
@@ -94,6 +96,17 @@ namespace Nexus.Audio
                 return;
             }
 
+            var duplicateIds = config.soundLibrary.Sounds
+                .GroupBy(s => s.Id)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (duplicateIds.Any())
+            {
+                Debug.LogWarning($"Found duplicate sound IDs in library {config.soundLibrary.name}: {string.Join(", ", duplicateIds)}");
+            }
+
             foreach (var sound in config.soundLibrary.Sounds)
             {
                 if (string.IsNullOrEmpty(sound.Id))
@@ -110,8 +123,7 @@ namespace Nexus.Audio
 
                 if (soundCache.ContainsKey(sound.Id))
                 {
-                    Debug.LogError($"Duplicate sound ID found: {sound.Id}");
-                    continue;
+                    Debug.LogWarning($"Duplicate sound ID '{sound.Id}' - using last definition");
                 }
 
                 soundCache[sound.Id] = sound;
@@ -124,6 +136,103 @@ namespace Nexus.Audio
         public Task WaitForInitialization()
         {
             return initializationTcs?.Task ?? Task.CompletedTask;
+        }
+        
+
+        public bool SetLibrary(SoundLibrary library, bool mergeDuplicates = false)
+        {
+            if (!isInitialized)
+            {
+                Debug.LogWarning("Cannot change library before service is initialized");
+                return false;
+            }
+
+            if (library == null)
+            {
+                Debug.LogError("Cannot set null sound library");
+                return false;
+            }
+
+            // Store current state
+            var previousLibrary = config.soundLibrary;
+            var previousCache = new Dictionary<string, SoundEntry>(soundCache);
+
+            try
+            {
+                // Clear existing cache
+                soundCache.Clear();
+
+                // Set new library
+                config.soundLibrary = library;
+
+                // Initialize with new library
+                InitializeSoundCache();
+
+                if (mergeDuplicates && previousLibrary != null)
+                {
+                    // Add back any sounds from previous library that don't conflict
+                    foreach (var kvp in previousCache)
+                    {
+                        if (!soundCache.ContainsKey(kvp.Key))
+                        {
+                            soundCache[kvp.Key] = kvp.Value;
+                        }
+                    }
+                }
+
+                LogDebug($"Successfully changed sound library to: {library.name}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Restore previous state on error
+                Debug.LogError($"Failed to change sound library: {ex.Message}");
+                config.soundLibrary = previousLibrary;
+                soundCache = previousCache;
+                return false;
+            }
+        }
+
+        public int MergeLibrary(SoundLibrary library, bool overwriteExisting = false)
+        {
+            if (!isInitialized)
+            {
+                Debug.LogWarning("Cannot merge library before service is initialized");
+                return 0;
+            }
+
+            if (library == null)
+            {
+                Debug.LogWarning("Cannot merge null library");
+                return 0;
+            }
+
+            int addedCount = 0;
+
+            foreach (var sound in library.Sounds)
+            {
+                if (string.IsNullOrEmpty(sound.Id))
+                {
+                    Debug.LogWarning($"Skipping sound '{sound.DisplayName}' with no ID");
+                    continue;
+                }
+
+                if (sound.Clip == null)
+                {
+                    Debug.LogWarning($"Skipping sound '{sound.Id}' with no clip");
+                    continue;
+                }
+
+                bool exists = soundCache.ContainsKey(sound.Id);
+                if (!exists || overwriteExisting)
+                {
+                    soundCache[sound.Id] = sound;
+                    addedCount++;
+                }
+            }
+
+            LogDebug($"Merged {addedCount} sounds from library: {library.name}");
+            return addedCount;
         }
 
 
@@ -176,10 +285,74 @@ namespace Nexus.Audio
             LogDebug($"Started looping sound: {soundEntry.DisplayName} [{soundId}]");
             return handle;
         }
+        
+        public void PlayOneShot(string soundId, float pitch, Vector3? position = null)
+        {
+            if (!isInitialized)
+            {
+                Debug.LogWarning("SoundService not initialized");
+                return;
+            }
+
+            if (!soundCache.TryGetValue(soundId, out var soundEntry))
+            {
+                Debug.LogError($"Sound with ID '{soundId}' not found");
+                return;
+            }
+
+            var source = GetFreeSource();
+            if (source == null) return;
+
+            ConfigureSource(source, soundEntry.Type, position);
+            source.pitch = pitch;
+            source.PlayOneShot(soundEntry.Clip, soundEntry.DefaultVolume);
+            LogDebug($"Playing one shot sound: {soundEntry.DisplayName} [{soundId}] with pitch {pitch}");
+        }
+
+        public ISoundHandle PlayLoop(string soundId, float pitch, Vector3? position = null)
+        {
+            if (!isInitialized)
+            {
+                Debug.LogWarning("SoundService not initialized");
+                return null;
+            }
+
+            if (!soundCache.TryGetValue(soundId, out var soundEntry))
+            {
+                Debug.LogError($"Sound with ID '{soundId}' not found");
+                return null;
+            }
+
+            var source = GetFreeSource();
+            if (source == null) return null;
+
+            ConfigureSourceFromEntry(source, soundEntry, position);
+            source.pitch = pitch; // Override any random pitch
+            source.clip = soundEntry.Clip;
+            source.loop = true;
+            source.volume = soundEntry.DefaultVolume;
+            source.Play();
+
+            var handle = new SoundHandle(source, soundEntry.Type, this);
+            activeHandles.Add(handle);
+
+            LogDebug($"Started looping sound: {soundEntry.DisplayName} [{soundId}] with pitch {pitch}");
+            return handle;
+        }
 
         private void ConfigureSourceFromEntry(AudioSource source, SoundEntry entry, Vector3? position)
         {
             source.outputAudioMixerGroup = GetMixerGroup(entry.Type);
+
+            // Apply pitch settings
+            if (entry.RandomizePitch)
+            {
+                source.pitch = UnityEngine.Random.Range(entry.PitchMin, entry.PitchMax);
+            }
+            else
+            {
+                source.pitch = 1f;
+            }
 
             if (entry.Spatialize || position.HasValue)
             {

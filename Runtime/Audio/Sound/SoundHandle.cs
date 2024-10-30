@@ -101,6 +101,16 @@ namespace Nexus.Audio
                 source.transform.position = position;
             }
         }
+        
+        public float Pitch => source?.pitch ?? 1f;
+
+        public void SetPitch(float pitch)
+        {
+            if (source != null)
+            {
+                source.pitch = pitch;
+            }
+        }
 
         private void StartFade(float targetVolume, Action onComplete = null)
         {
@@ -129,6 +139,8 @@ namespace Nexus.Audio
             fadeCoroutine = null;
             onComplete?.Invoke();
         }
+        
+        
 
         public void Dispose()
         {
