@@ -72,6 +72,8 @@ namespace Nexus.Audio
                 // Initialize collections
                 trackHistory = new Stack<int>(config.maxHistorySize);
 
+                await Task.Yield();
+                
                 // Create and configure audio sources
                 audioSources = new AudioSource[config.audioSourceCount];
                 for (int i = 0; i < config.audioSourceCount; i++)
