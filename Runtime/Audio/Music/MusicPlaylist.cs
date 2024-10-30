@@ -67,6 +67,29 @@ namespace Nexus.Audio
         {
             return tracks.Where(t => tags.All(tag => t.tags.Contains(tag)));
         }
+        
+        public int FindTrackIndex(string displayName)
+        {
+            return tracks.FindIndex(t => t.displayName == displayName);
+        }
+        
+        public int FindTrackIndexById(string id)
+        {
+            return tracks.FindIndex(t => t.id == id);
+        }
+
+        // Find track by ID
+        public TrackInfo FindTrackById(string id)
+        {
+            return tracks.FirstOrDefault(t => t.id == id);
+        }
+
+        // Get track index with validation
+        public int GetTrackIndex(TrackInfo track)
+        {
+            if (track == null) return -1;
+            return tracks.IndexOf(track);
+        }
 
         // Returns a shuffled copy of the tracks list
         public IReadOnlyList<TrackInfo> GetShuffledTracks()
@@ -81,6 +104,8 @@ namespace Nexus.Audio
         {
             return tracks.Sum(t => t.clip != null ? t.clip.length : 0f);
         }
+        
+        
 
 #if UNITY_EDITOR
         private void OnValidate()

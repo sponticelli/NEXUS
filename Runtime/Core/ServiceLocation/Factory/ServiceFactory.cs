@@ -97,13 +97,19 @@ namespace Nexus.Core.ServiceLocation
 
         private void ConfigureInstance(object instance, object configuration)
         {
-            if (configuration == null) return;
+            if (configuration == null)
+            {
+                Debug.Log($"No configuration provided for {instance.GetType().Name}");
+                return;
+            }
 
+            Debug.Log($"Configuring {instance.GetType().Name} with {configuration.GetType().Name}");
             Type configurableType = typeof(IConfigurable<>).MakeGenericType(configuration.GetType());
             if (configurableType.IsAssignableFrom(instance.GetType()))
             {
                 var configureMethod = instance.GetType().GetMethod("Configure", new[] { configuration.GetType() });
                 configureMethod?.Invoke(instance, new[] { configuration });
+                Debug.Log($"Successfully configured {instance.GetType().Name}");
             }
         }
     }

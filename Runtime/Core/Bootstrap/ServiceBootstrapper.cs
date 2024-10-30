@@ -92,6 +92,7 @@ namespace Nexus.Core.Bootstrap
             Debug.Log("Starting service registration");
 
             var serviceDefinitions = serviceRegistryAsset.GetServices();
+            Debug.Log($"Found {serviceDefinitions?.Count} services in registry");
             if (serviceDefinitions == null || serviceDefinitions.Count == 0)
             {
                 Debug.LogWarning("No services found in registry");
