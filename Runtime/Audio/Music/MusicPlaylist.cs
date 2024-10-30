@@ -9,32 +9,11 @@ namespace Nexus.Audio
     [CreateAssetMenu(fileName = "MusicPlaylist", menuName = "Nexus/Audio/Music Playlist")]
     public class MusicPlaylist : ScriptableObject
     {
-        [Serializable]
-        public class TrackInfo
-        {
-            [Tooltip("Unique identifier for the track")]
-            public string id;
-            
-            [Tooltip("Display name of the track")]
-            public string displayName;
-            
-            [Tooltip("The audio clip to play")]
-            public AudioClip clip;
-            
-            [Tooltip("Volume multiplier for this specific track (0-1)")]
-            [Range(0f, 1f)]
-            public float volumeMultiplier = 1f;
-            
-            [Tooltip("Optional track description or credits")]
-            [TextArea(1, 3)]
-            public string description;
-            
-            [Tooltip("Tags for filtering and organization")]
-            public List<string> tags = new List<string>();
-        }
-
         [SerializeField]
-        private List<TrackInfo> tracks = new List<TrackInfo>();
+        private List<MusicTrackInfo> tracks = new List<MusicTrackInfo>();
+
+        
+
 
         [Tooltip("Should the tracks be shuffled when the playlist starts?")]
         [SerializeField]
@@ -49,57 +28,57 @@ namespace Nexus.Audio
         private bool autoPlayOnSet = true;
 
         // Public properties
-        public IReadOnlyList<TrackInfo> Tracks => tracks;
+        public IReadOnlyList<MusicTrackInfo> Tracks => tracks.AsReadOnly();
         public bool ShuffleOnStart => shuffleOnStart;
         public bool LoopPlaylist => loopPlaylist;
         public bool AutoPlayOnSet => autoPlayOnSet;
         public int TrackCount => tracks.Count;
 
         // Returns a track by its ID
-        public TrackInfo GetTrackById(string id)
+        public MusicTrackInfo GetTrackById(string id)
         {
-            return tracks.FirstOrDefault(t => t.id == id);
+            return tracks.FirstOrDefault(t => t.Id == id);
         }
 
         // Returns a track by its index
-        public TrackInfo GetTrackByIndex(int index)
+        public MusicTrackInfo GetTrackByIndex(int index)
         {
             return index >= 0 && index < tracks.Count ? tracks[index] : null;
         }
 
         // Returns tracks matching specific tags
-        public IEnumerable<TrackInfo> GetTracksByTags(params string[] tags)
+        public IEnumerable<MusicTrackInfo> GetTracksByTags(params string[] tags)
         {
-            return tracks.Where(t => tags.All(tag => t.tags.Contains(tag)));
+            return tracks.Where(t => tags.All(tag => t.Tags.Contains(tag)));
         }
         
         public int FindTrackIndex(string displayName)
         {
-            return tracks.FindIndex(t => t.displayName == displayName);
+            return tracks.FindIndex(t => t.DisplayName == displayName);
         }
         
         public int FindTrackIndexById(string id)
         {
-            return tracks.FindIndex(t => t.id == id);
+            return tracks.FindIndex(t => t.Id == id);
         }
 
         // Find track by ID
-        public TrackInfo FindTrackById(string id)
+        public MusicTrackInfo FindTrackById(string id)
         {
-            return tracks.FirstOrDefault(t => t.id == id);
+            return tracks.FirstOrDefault(t => t.Id == id);
         }
 
         // Get track index with validation
-        public int GetTrackIndex(TrackInfo track)
+        public int GetTrackIndex(MusicTrackInfo track)
         {
             if (track == null) return -1;
             return tracks.IndexOf(track);
         }
 
         // Returns a shuffled copy of the tracks list
-        public IReadOnlyList<TrackInfo> GetShuffledTracks()
+        public IReadOnlyList<MusicTrackInfo> GetShuffledTracks()
         {
-            var shuffled = new List<TrackInfo>(tracks);
+            var shuffled = new List<MusicTrackInfo>(tracks);
             shuffled.ShuffleList();
             return shuffled;
         }
@@ -107,7 +86,7 @@ namespace Nexus.Audio
         // Returns the total duration of all tracks
         public float GetTotalDuration()
         {
-            return tracks.Sum(t => t.clip != null ? t.clip.length : 0f);
+            return tracks.Sum(t => t.Clip != null ? t.Clip.length : 0f);
         }
 
 #if UNITY_EDITOR
@@ -126,32 +105,32 @@ namespace Nexus.Audio
                 var track = tracks[i];
                 
                 // Generate ID if missing
-                if (string.IsNullOrEmpty(track.id))
+                if (string.IsNullOrEmpty(track.Id))
                 {
-                    track.id = System.Guid.NewGuid().ToString();
+                    track.Id = System.Guid.NewGuid().ToString();
                 }
                 
                 // Check for duplicate IDs
-                if (usedIds.Contains(track.id))
+                if (usedIds.Contains(track.Id))
                 {
-                    Debug.LogError($"Duplicate track ID found in playlist {name}: {track.id}");
-                    track.id = System.Guid.NewGuid().ToString();
+                    Debug.LogError($"Duplicate track ID found in playlist {name}: {track.Id}");
+                    track.Id = System.Guid.NewGuid().ToString();
                 }
-                usedIds.Add(track.id);
+                usedIds.Add(track.Id);
                 
                 // Generate display name if missing
-                if (string.IsNullOrEmpty(track.displayName) && track.clip != null)
+                if (string.IsNullOrEmpty(track.DisplayName) && track.Clip != null)
                 {
-                    track.displayName = track.clip.name;
+                    track.DisplayName = track.Clip.name;
                 }
                 
                 // Validate volume multiplier
-                track.volumeMultiplier = Mathf.Clamp01(track.volumeMultiplier);
+                track.VolumeMultiplier = Mathf.Clamp01(track.VolumeMultiplier);
                 
                 // Check for missing audio clips
-                if (track.clip == null)
+                if (track.Clip == null)
                 {
-                    Debug.LogWarning($"Missing audio clip for track {track.displayName} in playlist {name}");
+                    Debug.LogWarning($"Missing audio clip for track {track.DisplayName} in playlist {name}");
                 }
             }
         }
@@ -159,13 +138,7 @@ namespace Nexus.Audio
         // Editor utility method to add a track
         public void AddTrack(AudioClip clip, string displayName = null, float volumeMultiplier = 1f)
         {
-            var track = new TrackInfo
-            {
-                id = System.Guid.NewGuid().ToString(),
-                displayName = displayName ?? clip.name,
-                clip = clip,
-                volumeMultiplier = volumeMultiplier
-            };
+            var track = new MusicTrackInfo(Guid.NewGuid().ToString(), displayName ?? clip.name, clip, volumeMultiplier);
             
             tracks.Add(track);
             ValidatePlaylist();
@@ -174,7 +147,7 @@ namespace Nexus.Audio
         // Editor utility method to remove a track
         public void RemoveTrack(string id)
         {
-            tracks.RemoveAll(t => t.id == id);
+            tracks.RemoveAll(t => t.Id == id);
         }
 
         // Editor utility method to reorder tracks

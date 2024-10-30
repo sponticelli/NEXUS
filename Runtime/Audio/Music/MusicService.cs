@@ -35,7 +35,7 @@ namespace Nexus.Audio
 
         public string CurrentTrackName =>
             currentPlaylist?.Tracks != null && currentTrackIndex >= 0
-                ? currentPlaylist.Tracks[currentTrackIndex].displayName
+                ? currentPlaylist.Tracks[currentTrackIndex].DisplayName
                 : string.Empty;
 
         public float CurrentTrackTime =>
@@ -202,7 +202,7 @@ namespace Nexus.Audio
                 if (trackIndex >= 0 && trackIndex < currentPlaylist.Tracks.Count)
                 {
                     var track = currentPlaylist.Tracks[trackIndex];
-                    Debug.Log($"Found track: {track.displayName}, clip: {(track.clip != null ? "valid" : "null")}");
+                    Debug.Log($"Found track: {track.DisplayName}, clip: {(track.Clip != null ? "valid" : "null")}");
 
                     if (currentTrackIndex >= 0)
                     {
@@ -216,7 +216,7 @@ namespace Nexus.Audio
                     }
 
                     currentTrackIndex = trackIndex;
-                    lastPlayedTrackId = track.id;
+                    lastPlayedTrackId = track.Id;
 
                     Debug.Log("Calling PlayTrackInternal");
                     PlayTrackInternal(track, fadeIn);
@@ -228,7 +228,7 @@ namespace Nexus.Audio
                         PlayerPrefs.Save();
                     }
 
-                    Debug.Log($"PlayTrack completed for: {track.displayName}");
+                    Debug.Log($"PlayTrack completed for: {track.DisplayName}");
                 }
                 else
                 {
@@ -245,34 +245,7 @@ namespace Nexus.Audio
         {
             if (!IsInitialized || clip == null) return;
 
-            var trackInfo = new MusicTrackInfo
-            {
-                DisplayName = clip.name,
-                Clip = clip,
-                VolumeMultiplier = 1f,
-                StartTime = Time.time,
-                Duration = clip.length
-            };
-
-            PlayTrackInternal(trackInfo, fadeIn);
-        }
-
-        private void PlayTrackInternal(MusicPlaylist.TrackInfo track, bool fadeIn)
-        {
-            Debug.Log($"PlayTrackInternal starting for {track.displayName}");
-
-            var trackInfo = new MusicTrackInfo
-            {
-                Id = track.id,
-                DisplayName = track.displayName,
-                Clip = track.clip,
-                VolumeMultiplier = track.volumeMultiplier,
-                Description = track.description,
-                Tags = track.tags?.AsReadOnly(),
-                StartTime = Time.time,
-                Duration = track.clip?.length ?? 0f
-            };
-
+            var trackInfo = new MusicTrackInfo(Guid.NewGuid().ToString(), clip.name, clip).CreateRuntimeInfo(Time.time);
             PlayTrackInternal(trackInfo, fadeIn);
         }
 
@@ -500,7 +473,7 @@ namespace Nexus.Audio
                 }
 
                 var currentTrack = currentPlaylist?.Tracks[currentTrackIndex];
-                float volumeMultiplier = currentTrack?.volumeMultiplier ?? 1f;
+                float volumeMultiplier = currentTrack?.VolumeMultiplier ?? 1f;
 
                 fadeCoroutine = StartCoroutine(FadeIn(config.quickFadeDuration, volumeMultiplier));
             }
@@ -559,17 +532,7 @@ namespace Nexus.Audio
                 return false;
 
             var track = currentPlaylist.Tracks[currentTrackIndex];
-            trackInfo = new MusicTrackInfo
-            {
-                Id = track.id,
-                DisplayName = track.displayName,
-                Clip = track.clip,
-                VolumeMultiplier = track.volumeMultiplier,
-                Description = track.description,
-                Tags = track.tags?.AsReadOnly(),
-                StartTime = Time.time - CurrentTrackTime,
-                Duration = track.clip?.length ?? 0f
-            };
+            trackInfo = track.CreateRuntimeInfo(CurrentTrackTime);
 
             return true;
         }
@@ -691,7 +654,7 @@ namespace Nexus.Audio
             float volumeMultiplier = 1f;
             if (currentPlaylist?.Tracks != null && currentTrackIndex >= 0)
             {
-                volumeMultiplier = currentPlaylist.Tracks[currentTrackIndex].volumeMultiplier;
+                volumeMultiplier = currentPlaylist.Tracks[currentTrackIndex].VolumeMultiplier;
             }
 
             while (elapsedTime < duration)
@@ -725,7 +688,7 @@ namespace Nexus.Audio
         {
             if (currentPlaylist?.Tracks == null || currentTrackIndex < 0 || activeSourceIndex < 0) return;
 
-            float trackMultiplier = currentPlaylist.Tracks[currentTrackIndex].volumeMultiplier;
+            float trackMultiplier = currentPlaylist.Tracks[currentTrackIndex].VolumeMultiplier;
             float targetVolume = volume * trackMultiplier;
 
             var source = audioSources[activeSourceIndex];
