@@ -44,10 +44,15 @@ namespace Nexus.Audio
         [SerializeField]
         private bool loopPlaylist = true;
 
+        [Tooltip("Should the playlist automatically start playing when set?")]
+        [SerializeField]
+        private bool autoPlayOnSet = true;
+
         // Public properties
         public IReadOnlyList<TrackInfo> Tracks => tracks;
         public bool ShuffleOnStart => shuffleOnStart;
         public bool LoopPlaylist => loopPlaylist;
+        public bool AutoPlayOnSet => autoPlayOnSet;
         public int TrackCount => tracks.Count;
 
         // Returns a track by its ID
@@ -104,8 +109,6 @@ namespace Nexus.Audio
         {
             return tracks.Sum(t => t.clip != null ? t.clip.length : 0f);
         }
-        
-        
 
 #if UNITY_EDITOR
         private void OnValidate()

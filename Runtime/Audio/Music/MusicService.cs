@@ -92,7 +92,7 @@ namespace Nexus.Audio
                 // Now it's safe to set playlist
                 if (config.defaultPlaylist != null)
                 {
-                    SetPlaylist(config.defaultPlaylist, false);
+                    SetPlaylist(config.defaultPlaylist, config.defaultPlaylist.AutoPlayOnSet);
 
                     // Restore last played track if enabled
                     if (config.rememberLastTrack)
