@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Audio;
+using UnityEngine.Serialization;
 
 namespace Nexus.Audio
 {
@@ -31,8 +32,10 @@ namespace Nexus.Audio
         [Range(0f, 1f)]
         public float defaultEnvironmentVolume = 1f;
         
-        [Header("Audio Sources")]
-        public int poolSize = 20;
+        [FormerlySerializedAs("poolSize")] [Header("Audio Sources")]
+        public int initialSources = 20;
+        public int maxSources = 50;
+        public bool autoExpand = true;
         
         [Header("Fade Settings")]
         [Range(0.1f, 2f)]

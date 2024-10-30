@@ -52,7 +52,7 @@ namespace Nexus.Audio
                 LogDebug("Initializing sound service...");
 
                 // Initialize source pool
-                for (int i = 0; i < config.poolSize; i++)
+                for (int i = 0; i < config.initialSources; i++)
                 {
                     CreatePooledSource();
                 }
@@ -375,7 +375,15 @@ namespace Nexus.Audio
 
         private AudioSource GetFreeSource()
         {
-            return sourcePool.Find(s => !s.isPlaying) ?? CreatePooledSource();
+            var source = sourcePool.Find(s => !s.isPlaying);
+            if (source) return source;
+            
+            if (sourcePool.Count < config.maxSources)
+            {
+                return CreatePooledSource();
+            }
+            
+            return config.autoExpand ? CreatePooledSource() : null;
         }
 
         private AudioSource CreatePooledSource()
