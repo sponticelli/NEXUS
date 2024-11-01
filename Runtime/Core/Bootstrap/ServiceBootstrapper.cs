@@ -91,6 +91,8 @@ namespace Nexus.Core.Bootstrap
             {
                 ReportProgress(BootstrapStage.Failed, 0, 0, error: ex);
                 initializationTcs.SetException(ex);
+                
+                Debug.LogError($"Service bootstrapper initialization failed: {ex}");
                 throw;
             }
         }
@@ -158,6 +160,7 @@ namespace Nexus.Core.Bootstrap
                         catch (Exception ex)
                         {
                             ReportProgress(BootstrapStage.Failed, processedCount, sortedServiceTypes.Count, serviceDef.serviceName, ex);
+                            Debug.LogError($"Failed to register service {serviceDef.serviceName}: {ex}");
                             throw;
                         }
                     }
@@ -178,6 +181,7 @@ namespace Nexus.Core.Bootstrap
                         catch (Exception ex)
                         {
                             ReportProgress(BootstrapStage.Failed, i + 1, initializationTasks.Count, error: ex);
+                            Debug.LogError($"Failed to initialize service: {ex}");
                             throw;
                         }
                     }
@@ -186,6 +190,7 @@ namespace Nexus.Core.Bootstrap
             catch (Exception ex)
             {
                 ReportProgress(BootstrapStage.Failed, 0, serviceDefinitions.Count, error: ex);
+                Debug.LogError($"Service registration failed: {ex}");
                 throw;
             }
         }
