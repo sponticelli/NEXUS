@@ -22,10 +22,14 @@ namespace Nexus.Core.Bootstrap
         [SerializeField] private InitializeOn initializeOn = InitializeOn.Manual;
         [SerializeField] private ServiceRegistryAsset serviceRegistryAsset;
         [SerializeField] protected UnityEvent onInitialized;
+        [SerializeField] protected BootstrapProgressEvent onBootstrapProgress;
 
         private bool isInitialized = false;
         private TaskCompletionSource<bool> initializationTcs = new TaskCompletionSource<bool>();
+        private BootstrapStage currentStage = BootstrapStage.NotStarted;
 
+        public bool IsInitialized => isInitialized;
+        
         private void Awake()
         {
             Debug.Log($"ServiceBootstrapper Awake - Initialize On: {initializeOn}");
@@ -65,20 +69,32 @@ namespace Nexus.Core.Bootstrap
 
             if (serviceRegistryAsset == null)
             {
+                ReportProgress(BootstrapStage.Failed, 0, 0, error: new InvalidOperationException("No ServiceRegistryAsset assigned"));
                 Debug.LogError("No ServiceRegistryAsset assigned to ServiceBootstrapper!");
                 return;
             }
 
-            await RegisterServices();
-            Debug.Log("Service bootstrapper initialization completed");
-
-            isInitialized = true;
-            initializationTcs.SetResult(true);
-            onInitialized?.Invoke();
+            try 
+            {
+                await RegisterServices();
+                
+                if (currentStage != BootstrapStage.Failed)
+                {
+                    ReportProgress(BootstrapStage.Completed, 0, 0);
+                    Debug.Log("Service bootstrapper initialization completed");
+                    isInitialized = true;
+                    initializationTcs.SetResult(true);
+                    onInitialized?.Invoke();
+                }
+            }
+            catch (Exception ex)
+            {
+                ReportProgress(BootstrapStage.Failed, 0, 0, error: ex);
+                initializationTcs.SetException(ex);
+                throw;
+            }
         }
-
-        public bool IsInitialized => isInitialized;
-
+        
         public async Task WaitForInitialization()
         {
             if (!isInitialized)
@@ -89,87 +105,88 @@ namespace Nexus.Core.Bootstrap
 
         protected async Task RegisterServices()
         {
-            Debug.Log("Starting service registration");
-
+            ReportProgress(BootstrapStage.Registration, 0, 0);
+            
             var serviceDefinitions = serviceRegistryAsset.GetServices();
-            Debug.Log($"Found {serviceDefinitions?.Count} services in registry");
             if (serviceDefinitions == null || serviceDefinitions.Count == 0)
             {
+                ReportProgress(BootstrapStage.Failed, 0, 0, error: new InvalidOperationException("No services found in registry"));
                 Debug.LogWarning("No services found in registry");
                 return;
             }
 
             Debug.Log($"Found {serviceDefinitions.Count} services to register");
 
-            // Build the dependency graph
-            var dependencyGraph = BuildDependencyGraph(serviceDefinitions);
-            Debug.Log($"Built dependency graph with {dependencyGraph.Count} nodes");
-
-            // Perform topological sort
-            List<Type> sortedServiceTypes;
             try
             {
-                sortedServiceTypes = TopologicalSort(dependencyGraph);
-                Debug.Log($"Successfully sorted {sortedServiceTypes.Count} services");
+                // Build and sort dependency graph
+                var dependencyGraph = BuildDependencyGraph(serviceDefinitions);
+                var sortedServiceTypes = TopologicalSort(dependencyGraph);
+                var serviceDefMap = serviceDefinitions.ToDictionary(def => def.implementationType.Type);
+                
+                // Track initialization tasks
+                List<Task> initializationTasks = new List<Task>();
+                int processedCount = 0;
+                
+                // Registration phase
+                ReportProgress(BootstrapStage.Registration, 0, sortedServiceTypes.Count);
+                foreach (var implementationType in sortedServiceTypes)
+                {
+                    if (serviceDefMap.TryGetValue(implementationType, out var serviceDef))
+                    {
+                        try 
+                        {
+                            processedCount++;
+                            ReportProgress(BootstrapStage.Registration, processedCount, sortedServiceTypes.Count, serviceDef.serviceName);
+                            
+                            if (!ServiceLocator.Instance.CanResolve(serviceDef.interfaceType.Type))
+                            {
+                                var instance = RegisterService(serviceDef);
+                                
+                                if (instance == null)
+                                {
+                                    throw new InvalidOperationException($"Failed to create instance for {serviceDef.serviceName}");
+                                }
+                                
+                                // Queue initialization if needed
+                                if (instance is IInitiable initiable)
+                                {
+                                    initializationTasks.Add(initiable.InitializeAsync());
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ReportProgress(BootstrapStage.Failed, processedCount, sortedServiceTypes.Count, serviceDef.serviceName, ex);
+                            throw;
+                        }
+                    }
+                }
+
+                // Initialization phase
+                if (initializationTasks.Count > 0)
+                {
+                    ReportProgress(BootstrapStage.Initialization, 0, initializationTasks.Count);
+                    
+                    for (int i = 0; i < initializationTasks.Count; i++)
+                    {
+                        try
+                        {
+                            await initializationTasks[i];
+                            ReportProgress(BootstrapStage.Initialization, i + 1, initializationTasks.Count);
+                        }
+                        catch (Exception ex)
+                        {
+                            ReportProgress(BootstrapStage.Failed, i + 1, initializationTasks.Count, error: ex);
+                            throw;
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to sort services: {ex}");
-                return;
-            }
-
-            var serviceDefMap = serviceDefinitions.ToDictionary(def => def.implementationType.Type);
-            List<Task> initializationTasks = new List<Task>();
-
-            // Register and initialize services in order
-            foreach (var implementationType in sortedServiceTypes)
-            {
-                if (serviceDefMap.TryGetValue(implementationType, out var serviceDef))
-                {
-                    Debug.Log($"Processing service: {serviceDef.serviceName}");
-
-                    if (ServiceLocator.Instance.CanResolve(serviceDef.interfaceType.Type))
-                    {
-                        Debug.LogWarning($"Service {serviceDef.serviceName} already registered, skipping");
-                        continue;
-                    }
-
-                    try
-                    {
-                        Debug.Log($"Registering service: {serviceDef.serviceName}");
-                        var instance = RegisterService(serviceDef);
-
-                        if (instance == null)
-                        {
-                            Debug.LogError($"Failed to create instance for {serviceDef.serviceName}");
-                            continue;
-                        }
-
-                        if (instance is IInitiable initiableService)
-                        {
-                            Debug.Log($"Initializing service: {serviceDef.serviceName}");
-                            var initTask = initiableService.InitializeAsync();
-                            initializationTasks.Add(initTask);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"Failed to register service {serviceDef.serviceName}: {ex}");
-                        continue;
-                    }
-                }
-                else
-                {
-                    Debug.LogError($"Service definition not found for type {implementationType.FullName}");
-                }
-            }
-
-            // Wait for all initialization tasks to complete
-            if (initializationTasks.Count > 0)
-            {
-                Debug.Log($"Waiting for {initializationTasks.Count} services to initialize");
-                await Task.WhenAll(initializationTasks);
-                Debug.Log("All services initialized");
+                ReportProgress(BootstrapStage.Failed, 0, serviceDefinitions.Count, error: ex);
+                throw;
             }
         }
 
@@ -353,6 +370,20 @@ namespace Nexus.Core.Bootstrap
             }
 
             return sortedList;
+        }
+        
+        private void ReportProgress(BootstrapStage stage, int current, int total, string serviceName = null, Exception error = null)
+        {
+            currentStage = stage;
+            var progress = new BootstrapProgress(stage, current, total, serviceName, error);
+            onBootstrapProgress?.Invoke(progress);
+            
+            // Log progress if it's not spam
+            if (stage == BootstrapStage.Failed || stage == BootstrapStage.Completed || 
+                (current % 5 == 0 || current == total))
+            {
+                Debug.Log($"Bootstrap Progress: {stage} - {current}/{total} {(serviceName != null ? $"- {serviceName}" : "")}");
+            }
         }
 
         private bool TopologicalSortUtil(Type node, Dictionary<Type, bool> visited, List<Type> sortedList,

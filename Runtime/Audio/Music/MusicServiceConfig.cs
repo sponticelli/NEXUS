@@ -3,7 +3,7 @@ using UnityEngine.Audio;
 
 namespace Nexus.Audio
 {
-    [CreateAssetMenu(fileName = "MusicServiceConfig", menuName = "Nexus/Audio/Music Service Config")]
+    [CreateAssetMenu(fileName = "MusicServiceConfig", menuName = "Nexus/Audio/Music/Music Service Config")]
     public class MusicServiceConfig : ScriptableObject
     {
         [Header("Audio Settings")]

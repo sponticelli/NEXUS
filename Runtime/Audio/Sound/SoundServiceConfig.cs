@@ -4,7 +4,7 @@ using UnityEngine.Serialization;
 
 namespace Nexus.Audio
 {
-    [CreateAssetMenu(fileName = "SoundServiceConfig", menuName = "Nexus/Audio/Sound Service Config")]
+    [CreateAssetMenu(fileName = "SoundServiceConfig", menuName = "Nexus/Audio/Sound/Sound Service Config")]
     public class SoundServiceConfig : ScriptableObject
     {
         [Header("Sound Library")]

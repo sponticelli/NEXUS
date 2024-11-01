@@ -6,7 +6,7 @@ using Nexus.Extensions;
 
 namespace Nexus.Audio
 {
-    [CreateAssetMenu(fileName = "MusicPlaylist", menuName = "Nexus/Audio/Music Playlist")]
+    [CreateAssetMenu(fileName = "MusicPlaylist", menuName = "Nexus/Audio/Music/Music Playlist")]
     public class MusicPlaylist : ScriptableObject
     {
         [SerializeField]
