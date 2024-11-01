@@ -2,6 +2,9 @@ using System;
 
 namespace Nexus.Core.Bootstrap
 {
+    /// <summary>
+    /// Contains information about the current bootstrap progress
+    /// </summary>
     public class BootstrapProgress
     {
         public BootstrapStage Stage { get; }
