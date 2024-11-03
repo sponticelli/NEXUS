@@ -23,3 +23,7 @@ Network of Extensible Unity Systems - A modern Unity game framework
 - **[Music Service](Documentation%7E/MusicService.md)** - Background music playback with playlists and crossfading
 - **[Sound Service](Documentation%7E%2FSoundService.md)** - Audio playback with 3D spatial audio support
 - **[Network Time Service](Documentation%7E%2FNetworkTimeService.md)** - Automatic time synchronization with multiple NTP servers
+
+
+### Systems
+- **[Sequence System](Documentation%7E/SequenceSystem.md)** - ramework for orchestrating complex sequences of actions
