@@ -13,6 +13,7 @@ namespace Nexus.Audio
     {
         private bool showIdGenerator = false;
         private string containerClassName = "SoundIds";
+        private string enumName = "Sounds";
         private string namespaceName = "";
         private Object[] selectedLibraries;
         private SerializedProperty soundsProperty;
@@ -20,6 +21,7 @@ namespace Nexus.Audio
         private Vector2 scrollPosition;
         private readonly Dictionary<string, bool> soundFoldouts = new Dictionary<string, bool>();
         private readonly Dictionary<string, bool> pitchSettingsFoldouts = new Dictionary<string, bool>();
+
 
         private void OnEnable()
         {
@@ -321,66 +323,6 @@ namespace Nexus.Audio
             serializedObject.ApplyModifiedProperties();
         }
 
-        private void GenerateSoundIdsClass()
-        {
-            var allLibraries = new List<SoundLibrary> { (SoundLibrary)target };
-            if (selectedLibraries != null)
-            {
-                allLibraries.AddRange(selectedLibraries.Cast<SoundLibrary>());
-            }
-
-            var builder = new StringBuilder();
-
-            if (!string.IsNullOrEmpty(namespaceName))
-            {
-                builder.AppendLine($"namespace {namespaceName}");
-                builder.AppendLine("{");
-            }
-
-            // Begin container class
-            builder.AppendLine($"    public static class {containerClassName}");
-            builder.AppendLine("    {");
-
-            // Generate nested class for each library
-            foreach (var library in allLibraries)
-            {
-                var libraryClassName = SanitizeClassName(library.name);
-                builder.AppendLine($"        public static class {libraryClassName}");
-                builder.AppendLine("        {");
-
-                // Add const fields for sound IDs
-                foreach (var sound in library.Sounds)
-                {
-                    var constName = SanitizeConstName(sound.DisplayName);
-                    builder.AppendLine($"            public const string {constName} = \"{sound.Id}\";");
-                }
-
-                builder.AppendLine("        }");
-                builder.AppendLine();
-            }
-
-            builder.AppendLine("    }");
-
-            if (!string.IsNullOrEmpty(namespaceName))
-            {
-                builder.AppendLine("}");
-            }
-
-            var path = EditorUtility.SaveFilePanel(
-                "Save Sound IDs Class",
-                "Assets",
-                $"{containerClassName}.cs",
-                "cs"
-            );
-
-            if (!string.IsNullOrEmpty(path))
-            {
-                File.WriteAllText(path, builder.ToString());
-                AssetDatabase.Refresh();
-
-                Debug.Log($"Generated Sound IDs class at: {path}");
-            }
-        }
 
         private string SanitizeClassName(string name)
         {
@@ -402,16 +344,176 @@ namespace Nexus.Audio
                 .ToUpperInvariant();
         }
 
+        private void GenerateSoundIdsClass()
+        {
+            var allLibraries = new List<SoundLibrary> { (SoundLibrary)target };
+            if (selectedLibraries != null)
+            {
+                allLibraries.AddRange(selectedLibraries.Cast<SoundLibrary>());
+            }
+
+            var builder = new StringBuilder();
+
+            // Add using directives
+            builder.AppendLine("using System.Collections.Generic;");
+            builder.AppendLine("using System.Linq;");
+
+            // Add namespace if specified
+            if (!string.IsNullOrEmpty(namespaceName))
+            {
+                builder.AppendLine($"namespace {namespaceName}");
+                builder.AppendLine("{");
+            }
+
+            // Generate enum
+            builder.AppendLine($"    public enum {enumName}");
+            builder.AppendLine("    {");
+
+            var allSounds = allLibraries.SelectMany(lib => lib.Sounds)
+                .OrderBy(sound => sound.Type) // First sort by type
+                .ThenBy(sound => sound.DisplayName) // Then by name
+                .Select(sound => (sound.Type, sound.DisplayName))
+                .Distinct();
+
+            // Optional: Add a blank line between different sound types for readability
+            SoundType? currentType = null;
+            foreach (var (type, displayName) in allSounds)
+            {
+                if (currentType != type && currentType != null)
+                {
+                    builder.AppendLine(); // Add spacing between different types
+                }
+
+                currentType = type;
+
+                // Create enum value with type prefix
+                var enumName = SanitizeConstName($"{type}_{displayName}");
+                builder.AppendLine($"        {enumName},");
+            }
+
+            builder.AppendLine("    }");
+            builder.AppendLine();
+
+            // Generate IDs class grouped by SoundType
+            builder.AppendLine($"    public static class {containerClassName}");
+            builder.AppendLine("    {");
+
+            // Group sounds by type
+            var soundsByType = allLibraries.SelectMany(lib => lib.Sounds)
+                .GroupBy(sound => sound.Type)
+                .OrderBy(g => g.Key);
+
+            foreach (var group in soundsByType)
+            {
+                builder.AppendLine($"        public static class {group.Key}");
+                builder.AppendLine("        {");
+
+                foreach (var sound in group.OrderBy(s => s.DisplayName))
+                {
+                    var constName = SanitizeConstName(sound.DisplayName);
+                    builder.AppendLine($"            public const string {constName} = \"{sound.Id}\";");
+                }
+
+                builder.AppendLine("        }");
+                builder.AppendLine();
+            }
+
+            builder.AppendLine("    }");
+            builder.AppendLine();
+
+            // Generate converter class
+            builder.AppendLine("    public static class SoundIdConverter");
+            builder.AppendLine("    {");
+            builder.AppendLine($"        private static readonly Dictionary<{enumName}, string> _soundIdCache = new Dictionary<{enumName}, string>();");
+            builder.AppendLine();
+            builder.AppendLine("        static SoundIdConverter()");
+            builder.AppendLine("        {");
+            builder.AppendLine("            InitializeCache();");
+            builder.AppendLine("        }");
+            builder.AppendLine();
+            builder.AppendLine($"        public static string GetId({enumName} sound)");
+            builder.AppendLine("        {");
+            builder.AppendLine("            return _soundIdCache.GetValueOrDefault(sound);");
+            builder.AppendLine("        }");
+            builder.AppendLine();
+            builder.AppendLine("        private static void InitializeCache()");
+            builder.AppendLine("        {");
+            builder.AppendLine("            var constants = new Dictionary<string, string>();");
+            builder.AppendLine();
+            builder.AppendLine($"            // Get nested type classes (UI, SFX, Environment)");
+            builder.AppendLine($"            var typeClasses = typeof({containerClassName}).GetNestedTypes();");
+            builder.AppendLine($"            foreach (var typeClass in typeClasses)");
+            builder.AppendLine("            {");
+            builder.AppendLine("                // Get the SoundType name from the class name");
+            builder.AppendLine("                var typeName = typeClass.Name.ToUpperInvariant();");
+            builder.AppendLine();
+            builder.AppendLine("                // Get all constant fields in this type class");
+            builder.AppendLine("                var fields = typeClass.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)");
+            builder.AppendLine("                    .Where(fi => fi.IsLiteral && !fi.IsInitOnly);");
+            builder.AppendLine();
+            builder.AppendLine("                // Add constants with type prefix to match enum names");
+            builder.AppendLine("                foreach (var field in fields)");
+            builder.AppendLine("                {");
+            builder.AppendLine("                    constants[$\"{typeName}_{field.Name}\"] = (string)field.GetValue(null);");
+            builder.AppendLine("                }");
+            builder.AppendLine("            }");
+            builder.AppendLine();
+            builder.AppendLine($"            foreach ({enumName} sound in System.Enum.GetValues(typeof({enumName})))");
+            builder.AppendLine("            {");
+            builder.AppendLine("                string enumName = sound.ToString();");
+            builder.AppendLine("                if (constants.TryGetValue(enumName, out string id))");
+            builder.AppendLine("                {");
+            builder.AppendLine("                    _soundIdCache[sound] = id;");
+            builder.AppendLine("                }");
+            builder.AppendLine("            }");
+            builder.AppendLine("        }");
+            builder.AppendLine();
+            builder.AppendLine("        public static void RefreshCache()");
+            builder.AppendLine("        {");
+            builder.AppendLine("            _soundIdCache.Clear();");
+            builder.AppendLine("            InitializeCache();");
+            builder.AppendLine("        }");
+            builder.AppendLine();
+            builder.AppendLine("#if UNITY_EDITOR");
+            builder.AppendLine("        [UnityEditor.InitializeOnLoadMethod]");
+            builder.AppendLine("        private static void InitializeOnLoad()");
+            builder.AppendLine("        {");
+            builder.AppendLine("            RefreshCache();");
+            builder.AppendLine("        }");
+            builder.AppendLine("#endif");
+            builder.AppendLine("    }");
+
+            if (!string.IsNullOrEmpty(namespaceName))
+            {
+                builder.AppendLine("}");
+            }
+
+            var path = EditorUtility.SaveFilePanel(
+                "Save Generated Code",
+                "Assets",
+                $"{containerClassName}.cs",
+                "cs"
+            );
+
+            if (!string.IsNullOrEmpty(path))
+            {
+                File.WriteAllText(path, builder.ToString());
+                AssetDatabase.Refresh();
+                Debug.Log($"Generated code at: {path}");
+            }
+        }
+
         private void DrawIdGeneratorSection()
         {
-            showIdGenerator = EditorGUILayout.Foldout(showIdGenerator, "Sound IDs Class Generator");
+            showIdGenerator = EditorGUILayout.Foldout(showIdGenerator, "Code Generator");
             if (showIdGenerator)
             {
                 EditorGUI.indentLevel++;
 
                 // Container class settings
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                containerClassName = EditorGUILayout.TextField("Container Class Name", containerClassName);
+                containerClassName = EditorGUILayout.TextField("IDs Class Name", containerClassName);
+                enumName = EditorGUILayout.TextField("Enum Name", enumName);
                 namespaceName = EditorGUILayout.TextField("Namespace", namespaceName);
                 EditorGUILayout.EndVertical();
 
@@ -421,7 +523,6 @@ namespace Nexus.Audio
                 EditorGUILayout.LabelField("Additional Libraries", EditorStyles.boldLabel);
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-                // Library selection field
                 var newLibrary = EditorGUILayout.ObjectField(
                     "Add Library",
                     null,
@@ -429,12 +530,9 @@ namespace Nexus.Audio
                     false
                 ) as SoundLibrary;
 
-                if (newLibrary != null)
+                if (newLibrary != null && newLibrary != target)
                 {
-                    // Convert to list for modification
                     var libraryList = (selectedLibraries ?? new Object[0]).ToList();
-
-                    // Add if not already included
                     if (!libraryList.Contains(newLibrary))
                     {
                         libraryList.Add(newLibrary);
@@ -442,24 +540,16 @@ namespace Nexus.Audio
                     }
                 }
 
-                // Display selected libraries
                 if (selectedLibraries != null && selectedLibraries.Length > 0)
                 {
                     EditorGUI.indentLevel++;
                     for (int i = 0; i < selectedLibraries.Length; i++)
                     {
                         EditorGUILayout.BeginHorizontal();
-
-                        // Display library field
                         EditorGUI.BeginDisabledGroup(true);
-                        EditorGUILayout.ObjectField(
-                            selectedLibraries[i],
-                            typeof(SoundLibrary),
-                            false
-                        );
+                        EditorGUILayout.ObjectField(selectedLibraries[i], typeof(SoundLibrary), false);
                         EditorGUI.EndDisabledGroup();
 
-                        // Remove button
                         if (GUILayout.Button("X", GUILayout.Width(20)))
                         {
                             var list = selectedLibraries.ToList();
@@ -478,26 +568,19 @@ namespace Nexus.Audio
 
                 EditorGUILayout.Space(5);
 
-                // Generation button and preview
-                using (new EditorGUI.DisabledGroupScope(string.IsNullOrEmpty(containerClassName)))
+                using (new EditorGUI.DisabledGroupScope(string.IsNullOrEmpty(containerClassName) ||
+                                                        string.IsNullOrEmpty(enumName)))
                 {
-                    if (GUILayout.Button("Generate Sound IDs Class"))
+                    if (GUILayout.Button("Generate Code"))
                     {
                         GenerateSoundIdsClass();
                     }
-
-                    // Optional: Show preview of the class structure
-                    if (GUILayout.Button("Preview Generated Code"))
-                    {
-                        PreviewGeneratedCode();
-                    }
                 }
 
-                // Warning messages
-                if (string.IsNullOrEmpty(containerClassName))
+                if (string.IsNullOrEmpty(containerClassName) || string.IsNullOrEmpty(enumName))
                 {
                     EditorGUILayout.HelpBox(
-                        "Please enter a container class name.",
+                        "Please enter both class name and enum name.",
                         MessageType.Warning
                     );
                 }

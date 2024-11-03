@@ -381,7 +381,15 @@ namespace Nexus.Core.Bootstrap
         {
             currentStage = stage;
             var progress = new BootstrapProgress(stage, current, total, serviceName, error);
-            onBootstrapProgress?.Invoke(progress);
+            try
+            {
+                onBootstrapProgress?.Invoke(progress);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Error on invoke {e.Message}");
+                throw;
+            }
             
             // Log progress if it's not spam
             if (stage == BootstrapStage.Failed || stage == BootstrapStage.Completed || 
