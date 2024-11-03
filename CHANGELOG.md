@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.1.2 (2024-11-03)
+- Add MultiSpawnFactory 
+
 ## 1.1.1 (2024-11-03)
 - Add Spawner Step to Sequence System
 
