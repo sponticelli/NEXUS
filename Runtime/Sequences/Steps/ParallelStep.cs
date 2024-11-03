@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Nexus.Sequencers
+namespace Nexus.Sequences
 {
     public class ParallelStep : BaseStep
     {

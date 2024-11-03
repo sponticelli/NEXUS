@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Collections;
 using System;
 
-namespace Nexus.Sequencers
+namespace Nexus.Sequences
 {
     public abstract class CoroutineStep : BaseStep
     {

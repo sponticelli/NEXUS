@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Nexus.Sequencers
+namespace Nexus.Sequences
 {
     public abstract class BaseStep : MonoBehaviour, IStep
     {

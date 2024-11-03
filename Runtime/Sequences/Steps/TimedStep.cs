@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Nexus.Sequencers
+namespace Nexus.Sequences
 {
     public class TimedStep : BaseStep
     {

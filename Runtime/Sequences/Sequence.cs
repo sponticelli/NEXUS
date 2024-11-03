@@ -3,7 +3,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace Nexus.Sequencers
+namespace Nexus.Sequences
 {
     public class Sequence : MonoBehaviour
     {

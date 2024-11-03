@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Nexus.Sequencers
+namespace Nexus.Sequences
 {
     public class StepContext
     {

@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-namespace Nexus.Sequencers
+namespace Nexus.Sequences
 {
     public class FadeCanvasStep : CoroutineStep
     {

@@ -1,4 +1,4 @@
-namespace Nexus.Sequencers
+namespace Nexus.Sequences
 {
     public interface IStepWithContext : IStep
     {

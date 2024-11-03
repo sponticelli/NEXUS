@@ -1,6 +1,6 @@
 using System;
 
-namespace Nexus.Sequencers
+namespace Nexus.Sequences
 {
     public interface IStep
     {

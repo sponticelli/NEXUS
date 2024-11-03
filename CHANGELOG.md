@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 1.1.1 (2024-11-03)
+- Add Spawner Step to Sequence System
 
 ## 1.1.0 (2024-11-03)
 - Add Sequence System
