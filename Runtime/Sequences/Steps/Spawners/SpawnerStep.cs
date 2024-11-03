@@ -15,7 +15,7 @@ namespace Nexus.Sequences
     {
         [Header("Spawn Setup")]
         [SerializeField] private Transform[] spawnPoints;
-        [SerializeField] private PrefabFactory prefabFactory;
+        [SerializeField] private BaseSpawnFactory prefabFactory;
         [SerializeField] private GameObject[] fallbackPrefabs;
 
         [Header("Configuration")]
