@@ -7,6 +7,8 @@ namespace Nexus.Sequencers
 {
     public class Sequence : MonoBehaviour
     {
+        [SerializeField] private bool _resetContextOnStart = true;
+        
         private BaseStep[] sequenceSteps;
         private int currentIndex = -1;
         private bool isRunning;
@@ -16,6 +18,8 @@ namespace Nexus.Sequencers
         
         public event Action OnCompleteEvent;
         public UnityEvent OnComplete;
+        
+        private StepContext context = new();
 
         private void Awake()
         {
@@ -38,7 +42,9 @@ namespace Nexus.Sequencers
             {
                 isRunning = true;
                 IsPaused = false;
-                StartNextSequence();
+                if (_resetContextOnStart)
+                    context = new StepContext();
+                StartNextStep();
             }
         }
 
@@ -51,10 +57,10 @@ namespace Nexus.Sequencers
             currentSequence.UpdateStep();
 
             if (currentSequence.IsComplete)
-                StartNextSequence();
+                StartNextStep();
         }
 
-        private void StartNextSequence()
+        private void StartNextStep()
         {
             currentIndex++;
             
@@ -65,7 +71,10 @@ namespace Nexus.Sequencers
                 return;
             }
 
-            sequenceSteps[currentIndex].StartStep();
+            var nextStep = sequenceSteps[currentIndex];
+            var stepWithContext = nextStep as IStepWithContext;
+            stepWithContext?.SetContext(context);
+            nextStep.StartStep();
         }
 
         public void Pause()
@@ -91,7 +100,7 @@ namespace Nexus.Sequencers
         public void SkipCurrentSequence()
         {
             if (currentIndex >= 0 && currentIndex < sequenceSteps.Length)
-                StartNextSequence();
+                StartNextStep();
         }
     }
 }

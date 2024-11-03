@@ -12,7 +12,7 @@ namespace Nexus.Sequencers
             childSequence = GetComponentInChildren<Sequence>();
             if (childSequence == null)
             {
-                var sequencerObj = new GameObject("NestedSequencer");
+                var sequencerObj = new GameObject("NestedSequence");
                 sequencerObj.transform.SetParent(transform);
                 childSequence = sequencerObj.AddComponent<Sequence>();
             }

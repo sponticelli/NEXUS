@@ -5,29 +5,29 @@ namespace Nexus.Sequencers
 {
     public class ParallelStep : BaseStep
     {
-        private List<IStep> childSequences = new List<IStep>();
-        private bool allChildrenComplete => childSequences.All(seq => seq.IsComplete);
-        private bool allChildrenFinished => childSequences.All(seq => seq.IsFinished);
+        private List<IStep> childSteps = new List<IStep>();
+        private bool allChildrenComplete => childSteps.All(seq => seq.IsComplete);
+        private bool allChildrenFinished => childSteps.All(seq => seq.IsFinished);
 
         public override void InitStep()
         {
             base.InitStep();
-            childSequences = GetComponentsInChildren<IStep>()
+            childSteps = GetComponentsInChildren<IStep>()
                 .Where(seq => seq != this)
                 .ToList();
 
-            foreach (var sequence in childSequences)
+            foreach (var step in childSteps)
             {
-                sequence.InitStep();
+                step.InitStep();
             }
         }
 
         public override void StartStep()
         {
             base.StartStep();
-            foreach (var sequence in childSequences)
+            foreach (var step in childSteps)
             {
-                sequence.StartStep();
+                step.StartStep();
             }
         }
 
@@ -35,9 +35,9 @@ namespace Nexus.Sequencers
         {
             if (!isComplete)
             {
-                foreach (var sequence in childSequences)
+                foreach (var step in childSteps)
                 {
-                    sequence.UpdateStep();
+                    step.UpdateStep();
                 }
 
                 if (allChildrenComplete)
@@ -54,7 +54,7 @@ namespace Nexus.Sequencers
 
         public override void CleanupStep()
         {
-            foreach (var sequence in childSequences)
+            foreach (var sequence in childSteps)
             {
                 sequence.CleanupStep();
             }
