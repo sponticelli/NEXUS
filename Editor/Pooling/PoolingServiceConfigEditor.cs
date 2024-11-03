@@ -375,7 +375,7 @@ namespace Nexus.Pooling
 
         private string SanitizeEnumValue(string id)
         {
-            return id.Replace(" ", "_").Replace("-", "_");
+            return id.Replace(" ", "_").Replace("-", "_").ToUpperInvariant();
         }
 
         private string SanitizeConstName(string name)
