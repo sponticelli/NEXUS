@@ -13,9 +13,6 @@ namespace Nexus.Sequences
         [Tooltip("Optional timeout duration in seconds. Set to 0 or negative for no timeout.")]
         public float timeoutDuration = -1f;
 
-        [Tooltip("Whether to automatically complete the step when the coroutine finishes.")]
-        public bool autoCompleteOnFinish = true;
-
         public event Action OnTimeout;
 
         protected abstract IEnumerator StepRoutine();
@@ -23,6 +20,8 @@ namespace Nexus.Sequences
         public override void StartStep()
         {
             base.StartStep();
+            // Complete immediately when step starts
+            Complete();
             StartStepRoutine();
         }
 
@@ -89,9 +88,9 @@ namespace Nexus.Sequences
                 yield return routine.Current;
             }
 
-            if (!hadError && autoCompleteOnFinish && !isComplete)
+            if (!hadError)
             {
-                Complete();
+                // Mark as finished only when coroutine completes successfully
                 Finish();
             }
 
@@ -116,14 +115,14 @@ namespace Nexus.Sequences
         {
             Debug.LogWarning($"{GetType().Name} timed out after {timeoutDuration} seconds");
             StopStepRoutine();
-            Complete();
+            // Ensure step is finished on timeout
             Finish();
         }
 
         protected virtual void HandleStepError(Exception error)
         {
             StopStepRoutine();
-            Complete();
+            // Ensure step is finished on error
             Finish();
         }
 
