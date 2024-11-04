@@ -17,5 +17,15 @@ namespace Nexus.Pooling
             var poolingService = ServiceLocator.Instance.GetService<IPoolingService>();
             return poolingService.GetFromPool(poolId, position, rotation);
         }
+        
+        public static void  ReturnToPool(this GameObject go)
+        {
+            var returnToPool = go.GetComponent<PooledObject>();
+            if (returnToPool == null)
+            {
+                returnToPool.ReturnToPool();
+            }
+            GameObject.Destroy(go);
+        }
     }
 }
