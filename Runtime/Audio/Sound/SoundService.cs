@@ -573,7 +573,7 @@ namespace Nexus.Audio
         {
             source.playOnAwake = false;
             source.priority = 128;
-            source.spatialBlend = 0f; // Start as 2D by default
+            source.spatialBlend = 0f; // Start as TwoD by default
         }
 
         private void ConfigureSource(AudioSource source, SoundType type, Vector3? position)

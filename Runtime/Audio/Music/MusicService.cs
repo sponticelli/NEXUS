@@ -138,7 +138,7 @@ namespace Nexus.Audio
             source.loop = true; // Ensure looping is explicitly set
             source.outputAudioMixerGroup = config.mixerGroup;
             source.priority = 0; // Highest priority
-            source.spatialBlend = 0f; // Pure 2D
+            source.spatialBlend = 0f; // Pure TwoD
             source.reverbZoneMix = 0f; // No reverb
             source.dopplerLevel = 0f; // No doppler effect
             source.rolloffMode = AudioRolloffMode.Linear;
