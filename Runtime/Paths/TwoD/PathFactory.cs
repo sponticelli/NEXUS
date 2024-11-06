@@ -4,6 +4,12 @@ namespace Paths.TwoD
 {
     public static class PathFactory
     {
+        public static IPath CreateStraightPath(Vector2 start, Vector2 end)
+        {
+            return new LinePath(start, end);
+        }
+        
+        
         public static IPath CreateCircularPath(Vector2 center, float radius, float startAngle = 0f)
         {
             const int segments = 8;
