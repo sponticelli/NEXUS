@@ -32,5 +32,10 @@ namespace Nexus.Extensions
                 UnityEngine.Random.Range(min, max)
             );
         }
+        
+        public static Vector3 QuadraticBezier(this Vector3 a, Vector3 b, Vector3 c, float t)
+        {
+            return Vector3.Lerp(Vector3.Lerp(a, b, t), Vector3.Lerp(b, c, t), t);
+        }
     }
 }
