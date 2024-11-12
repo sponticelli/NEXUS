@@ -9,7 +9,8 @@ namespace Nexus.Registries
     {
         [SerializeField] private T _object;
         [SerializeField] private bool _findComponentIfNull = true;
-        [SerializeField] private bool _deregisterOnDestroy = true;
+
+        
 
         private IComponentRegistry _registry;
         private bool _isRegistered;
@@ -25,7 +26,7 @@ namespace Nexus.Registries
                 Debug.LogError($"No {typeof(T).Name} component assigned or found on {gameObject.name}", this);
         }
 
-        private void Start()
+        private void OnEnable()
         {
             if (_object != null && !_isRegistered)
             {
@@ -34,9 +35,9 @@ namespace Nexus.Registries
             }
         }
 
-        private void OnDestroy()
+        private void OnDisable()
         {
-            if (_deregisterOnDestroy && _registry != null && _object != null && _isRegistered)
+            if (_registry != null && _object != null && _isRegistered)
             {
                 _registry.Deregister(_object);
                 _isRegistered = false;
