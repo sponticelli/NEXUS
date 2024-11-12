@@ -9,6 +9,7 @@ using UnityEngine.Events;
 
 namespace Nexus.Core.Bootstrap
 {
+    [DefaultExecutionOrder(ExecutionOrder.ServiceBootstrapper)]
     public class ServiceBootstrapper : MonoBehaviour
     {
         public enum InitializeOn

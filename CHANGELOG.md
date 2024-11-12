@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.1.4 (2024-11-12)
+- Add ComponentRegistry service
+
 ## 1.1.3 (2024-11-04)
 - Add Step Listener to Sequence System
 

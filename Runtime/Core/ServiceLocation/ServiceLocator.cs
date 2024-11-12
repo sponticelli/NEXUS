@@ -4,6 +4,7 @@ using UnityEngine.SceneManagement;
 
 namespace Nexus.Core.ServiceLocation
 {
+    [DefaultExecutionOrder(ExecutionOrder.ServiceLocator)]
     public class ServiceLocator : MonoBehaviour, IServiceResolver
     {
         private static ServiceLocator instance;
