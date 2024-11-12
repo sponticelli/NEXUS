@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -139,47 +140,99 @@ namespace Nexus.Core.ServiceLocation
         public void OnSceneUnloaded(Scene scene)
         {
             Debug.Log($"Scene unloaded: {scene.name}");
+    
             if (!sceneScopedServices.TryGetValue(scene.name, out var sceneServices)) 
             {
                 return;
             }
 
-            foreach (var service in sceneServices.Values)
+            try 
             {
-                if (service is MonoBehaviour mb)
+                foreach (var servicePair in sceneServices.ToList())
                 {
-                    Debug.Log($"Destroying scene-scoped service {mb.GetType().Name} in scene {scene.name}");
-                    GameObject.Destroy(mb.gameObject);
-                }
-                else if (service is IDisposable disposable)
-                {
-                    Debug.Log($"Disposing scene-scoped service {service.GetType().Name}");
-                    disposable.Dispose();
-                }
-            }
+                    var service = servicePair.Value;
+                    if (service == null) continue;
 
-            sceneScopedServices.Remove(scene.name);
+                    if (service is MonoBehaviour mb)
+                    {
+                        if (mb != null && mb.gameObject != null)
+                        {
+                            Debug.Log($"Destroying scene-scoped MonoBehaviour service {mb.GetType().Name} in scene {scene.name}");
+                            GameObject.Destroy(mb.gameObject);
+                        }
+                    }
+                    else if (service is IDisposable disposable)
+                    {
+                        try
+                        {
+                            Debug.Log($"Disposing scene-scoped service {service.GetType().Name}");
+                            disposable.Dispose();
+                        }
+                        catch (MissingReferenceException)
+                        {
+                            Debug.LogWarning($"Attempted to dispose already destroyed service in scene {scene.name}");
+                        }
+                    }
+                }
+
+                sceneScopedServices.Remove(scene.name);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error during scene service cleanup for scene {scene.name}: {ex.Message}");
+                // Still remove the scene services to prevent memory leaks
+                sceneScopedServices.Remove(scene.name);
+            }
         }
 
         public void CleanupServices()
         {
             Debug.Log("Cleaning up all services");
-            foreach (var sceneServices in sceneScopedServices.Values)
+    
+            try 
             {
-                foreach (var service in sceneServices.Values)
+                foreach (var scenePair in sceneScopedServices)
                 {
-                    if (service is MonoBehaviour mb)
+                    var sceneServices = scenePair.Value;
+                    if (sceneServices == null) continue;
+
+                    foreach (var servicePair in sceneServices.ToList())
                     {
-                        GameObject.Destroy(mb.gameObject);
-                    }
-                    else if (service is IDisposable disposable)
-                    {
-                        disposable.Dispose();
+                        var service = servicePair.Value;
+                        if (service == null) continue;
+
+                        if (service is MonoBehaviour mb)
+                        {
+                            // Check if the MonoBehaviour and its gameObject are still valid
+                            if (mb != null && mb.gameObject != null)
+                            {
+                                Debug.Log($"Destroying scene-scoped MonoBehaviour service {mb.GetType().Name}");
+                                GameObject.Destroy(mb.gameObject);
+                            }
+                        }
+                        else if (service is IDisposable disposable)
+                        {
+                            try
+                            {
+                                Debug.Log($"Disposing scene-scoped service {service.GetType().Name}");
+                                disposable.Dispose();
+                            }
+                            catch (MissingReferenceException)
+                            {
+                                Debug.LogWarning($"Attempted to dispose already destroyed service of type {service.GetType().Name}");
+                            }
+                        }
                     }
                 }
-            }
 
-            sceneScopedServices.Clear();
+                sceneScopedServices.Clear();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error during service cleanup: {ex.Message}");
+                // Still clear the dictionary to prevent memory leaks
+                sceneScopedServices.Clear();
+            }
         }
     }
 }
