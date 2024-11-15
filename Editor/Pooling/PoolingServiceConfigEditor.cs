@@ -4,6 +4,7 @@ using System.Text;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using Nexus.Extensions;
 
 namespace Nexus.Pooling
 {
@@ -37,6 +38,7 @@ namespace Nexus.Pooling
             {
                 AddNewPool();
             }
+
             EditorGUILayout.EndHorizontal();
 
             if (showPoolList)
@@ -108,7 +110,8 @@ namespace Nexus.Pooling
             }
         }
 
-        private void DrawPoolProperties(SerializedProperty poolProperty, SerializedProperty idProperty, SerializedProperty prefabProperty)
+        private void DrawPoolProperties(SerializedProperty poolProperty, SerializedProperty idProperty,
+            SerializedProperty prefabProperty)
         {
             EditorGUILayout.PropertyField(idProperty);
             EditorGUILayout.PropertyField(prefabProperty);
@@ -130,6 +133,7 @@ namespace Nexus.Pooling
             {
                 EditorGUILayout.HelpBox("Prefab is required", MessageType.Error);
             }
+
             if (string.IsNullOrEmpty(idProperty.stringValue))
             {
                 EditorGUILayout.HelpBox("Pool ID is required", MessageType.Error);
@@ -209,6 +213,7 @@ namespace Nexus.Pooling
 
                         EditorGUILayout.EndHorizontal();
                     }
+
                     EditorGUI.indentLevel--;
                 }
 
@@ -217,7 +222,7 @@ namespace Nexus.Pooling
                 EditorGUILayout.Space(5);
 
                 using (new EditorGUI.DisabledGroupScope(string.IsNullOrEmpty(containerClassName) ||
-                                                      string.IsNullOrEmpty(enumName)))
+                                                        string.IsNullOrEmpty(enumName)))
                 {
                     if (GUILayout.Button("Generate Code"))
                     {
@@ -251,17 +256,39 @@ namespace Nexus.Pooling
                 builder.AppendLine("{");
             }
 
+            // Get existing enum values to preserve ordering
+            var existingFile = GetExistingEnumFile(enumName);
+            var existingValues = GetExistingEnumValues(existingFile, enumName);
+
             // Generate enum
             builder.AppendLine($"    public enum {enumName}");
             builder.AppendLine("    {");
 
             var allPools = allConfigs.SelectMany(config => config.Configurations)
-                .OrderBy(pool => pool.id);
+                .OrderBy(pool => pool.id)
+                .ToList();
 
+            // Start with highest existing value or 0
+            int nextValue = existingValues.Count > 0 ? existingValues.Values.Max() + 1 : 0;
+
+            // First add existing values in their original order
             foreach (var pool in allPools)
             {
                 var enumValue = SanitizeEnumValue(pool.id);
-                builder.AppendLine($"        {enumValue},");
+                if (existingValues.TryGetValue(enumValue, out int value))
+                {
+                    builder.AppendLine($"        {enumValue} = {value},");
+                }
+            }
+
+            // Then add new values
+            foreach (var pool in allPools)
+            {
+                var enumValue = SanitizeEnumValue(pool.id);
+                if (!existingValues.ContainsKey(enumValue))
+                {
+                    builder.AppendLine($"        {enumValue} = {nextValue++},");
+                }
             }
 
             builder.AppendLine("    }");
@@ -271,31 +298,21 @@ namespace Nexus.Pooling
             builder.AppendLine($"    public static class {containerClassName}");
             builder.AppendLine("    {");
 
-            foreach (var pool in allPools)
+            foreach (var config in allConfigs)
             {
-                var constName = SanitizeConstName(pool.id);
-                builder.AppendLine($"        public const string {constName} = \"{pool.id}\";");
-            }
+                var className = SanitizeClassName(config.name);
+                builder.AppendLine($"        public static class {className}");
+                builder.AppendLine("        {");
 
-            builder.AppendLine();
-
-            // Add helper method to get prefab name
-            builder.AppendLine("        private static readonly Dictionary<string, string> _prefabNames = new Dictionary<string, string>");
-            builder.AppendLine("        {");
-            foreach (var pool in allPools)
-            {
-                if (pool.prefab != null)
+                foreach (var pool in config.Configurations.OrderBy(p => p.id))
                 {
-                    builder.AppendLine($"            {{ \"{pool.id}\", \"{pool.prefab.name}\" }},");
+                    var constName = SanitizeConstName(pool.id);
+                    builder.AppendLine($"            public const string {constName} = \"{pool.id}\";");
                 }
-            }
-            builder.AppendLine("        };");
-            builder.AppendLine();
 
-            builder.AppendLine("        public static string GetPrefabName(string poolId)");
-            builder.AppendLine("        {");
-            builder.AppendLine("            return _prefabNames.TryGetValue(poolId, out var name) ? name : null;");
-            builder.AppendLine("        }");
+                builder.AppendLine("        }");
+                builder.AppendLine();
+            }
 
             builder.AppendLine("    }");
             builder.AppendLine();
@@ -303,7 +320,8 @@ namespace Nexus.Pooling
             // Generate converter class
             builder.AppendLine($"    public static class PoolIdConverter");
             builder.AppendLine("    {");
-            builder.AppendLine($"        private static readonly Dictionary<{enumName}, string> _poolIdCache = new Dictionary<{enumName}, string>();");
+            builder.AppendLine(
+                $"        private static readonly Dictionary<{enumName}, string> _poolIdCache = new Dictionary<{enumName}, string>();");
             builder.AppendLine();
             builder.AppendLine("        static PoolIdConverter()");
             builder.AppendLine("        {");
@@ -317,11 +335,22 @@ namespace Nexus.Pooling
             builder.AppendLine();
             builder.AppendLine("        private static void InitializeCache()");
             builder.AppendLine("        {");
-            builder.AppendLine($"            var fields = typeof({containerClassName}).GetFields();");
-            builder.AppendLine("            var constants = fields.ToDictionary(");
-            builder.AppendLine("                f => f.Name,");
-            builder.AppendLine("                f => (string)f.GetValue(null)");
-            builder.AppendLine("            );");
+            builder.AppendLine("            var constants = new Dictionary<string, string>();");
+            builder.AppendLine();
+            builder.AppendLine($"            // Get nested type classes (configs)");
+            builder.AppendLine($"            var configClasses = typeof({containerClassName}).GetNestedTypes();");
+            builder.AppendLine($"            foreach (var configClass in configClasses)");
+            builder.AppendLine("            {");
+            builder.AppendLine("                // Get all constant fields in this config class");
+            builder.AppendLine(
+                "                var fields = configClass.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)");
+            builder.AppendLine("                    .Where(fi => fi.IsLiteral && !fi.IsInitOnly);");
+            builder.AppendLine();
+            builder.AppendLine("                foreach (var field in fields)");
+            builder.AppendLine("                {");
+            builder.AppendLine("                    constants[field.Name] = (string)field.GetValue(null);");
+            builder.AppendLine("                }");
+            builder.AppendLine("            }");
             builder.AppendLine();
             builder.AppendLine($"            foreach ({enumName} pool in System.Enum.GetValues(typeof({enumName})))");
             builder.AppendLine("            {");
@@ -368,6 +397,47 @@ namespace Nexus.Pooling
             }
         }
 
+
+        private string GetExistingEnumFile(string enumName)
+        {
+            var guids = AssetDatabase.FindAssets($"t:Script {enumName}");
+            foreach (var guid in guids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var content = System.IO.File.ReadAllText(path);
+                if (content.Contains($"public enum {enumName}"))
+                {
+                    return content;
+                }
+            }
+
+            return null;
+        }
+
+        private Dictionary<string, int> GetExistingEnumValues(string existingFile, string enumName)
+        {
+            var values = new Dictionary<string, int>();
+            if (string.IsNullOrEmpty(existingFile)) return values;
+
+            var enumRegex = new System.Text.RegularExpressions.Regex(
+                $@"public\s+enum\s+{enumName}\s*\{{([^}}]*)\}}",
+                System.Text.RegularExpressions.RegexOptions.Singleline
+            );
+
+            var match = enumRegex.Match(existingFile);
+            if (!match.Success) return values;
+
+            var valueRegex = new System.Text.RegularExpressions.Regex(@"(\w+)\s*=\s*(\d+)");
+            var valueMatches = valueRegex.Matches(match.Groups[1].Value);
+
+            foreach (System.Text.RegularExpressions.Match valueMatch in valueMatches)
+            {
+                values[valueMatch.Groups[1].Value] = int.Parse(valueMatch.Groups[2].Value);
+            }
+
+            return values;
+        }
+
         private string SanitizePoolId(string name)
         {
             return name.Replace(" ", "").Replace("-", "_");
@@ -381,6 +451,11 @@ namespace Nexus.Pooling
         private string SanitizeConstName(string name)
         {
             return name.Replace(" ", "_").Replace("-", "_").ToUpperInvariant();
+        }
+        
+        private string SanitizeClassName(string name)
+        {
+            return name.ToCamelCase().Replace(" ", "").Replace("-", "");
         }
     }
 }
