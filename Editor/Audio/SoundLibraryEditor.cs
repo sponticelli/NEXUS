@@ -344,6 +344,46 @@ namespace Nexus.Audio
                 .ToUpperInvariant();
         }
 
+        private string GetExistingEnumFile(string enumName)
+        {
+            var guids = AssetDatabase.FindAssets($"t:Script {enumName}");
+            foreach (var guid in guids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var content = System.IO.File.ReadAllText(path);
+                if (content.Contains($"public enum {enumName}"))
+                {
+                    return content;
+                }
+            }
+
+            return null;
+        }
+
+        private Dictionary<string, int> GetExistingEnumValues(string existingFile, string enumName)
+        {
+            var values = new Dictionary<string, int>();
+            if (string.IsNullOrEmpty(existingFile)) return values;
+
+            var enumRegex = new System.Text.RegularExpressions.Regex(
+                $@"public\s+enum\s+{enumName}\s*\{{([^}}]*)\}}",
+                System.Text.RegularExpressions.RegexOptions.Singleline
+            );
+
+            var match = enumRegex.Match(existingFile);
+            if (!match.Success) return values;
+
+            var valueRegex = new System.Text.RegularExpressions.Regex(@"(\w+)\s*=\s*(\d+)");
+            var valueMatches = valueRegex.Matches(match.Groups[1].Value);
+
+            foreach (System.Text.RegularExpressions.Match valueMatch in valueMatches)
+            {
+                values[valueMatch.Groups[1].Value] = int.Parse(valueMatch.Groups[2].Value);
+            }
+
+            return values;
+        }
+
         private void GenerateSoundIdsClass()
         {
             var allLibraries = new List<SoundLibrary> { (SoundLibrary)target };
@@ -365,30 +405,60 @@ namespace Nexus.Audio
                 builder.AppendLine("{");
             }
 
+            // Get existing enum values to preserve ordering
+            var existingFile = GetExistingEnumFile(enumName);
+            var existingValues = GetExistingEnumValues(existingFile, enumName);
+
             // Generate enum
             builder.AppendLine($"    public enum {enumName}");
             builder.AppendLine("    {");
 
             var allSounds = allLibraries.SelectMany(lib => lib.Sounds)
-                .OrderBy(sound => sound.Type) // First sort by type
-                .ThenBy(sound => sound.DisplayName) // Then by name
+                .OrderBy(sound => sound.Type)
+                .ThenBy(sound => sound.DisplayName)
                 .Select(sound => (sound.Type, sound.DisplayName))
-                .Distinct();
+                .Distinct()
+                .ToList();
 
-            // Optional: Add a blank line between different sound types for readability
+            // Start with highest existing value or 0
+            int nextValue = existingValues.Count > 0 ? existingValues.Values.Max() + 1 : 0;
+
+            // Add spacing between different sound types
             SoundType? currentType = null;
+
+            // First add existing values in their original order
             foreach (var (type, displayName) in allSounds)
             {
                 if (currentType != type && currentType != null)
                 {
-                    builder.AppendLine(); // Add spacing between different types
+                    builder.AppendLine();
                 }
 
                 currentType = type;
 
-                // Create enum value with type prefix
-                var enumName = SanitizeConstName($"{type}_{displayName}");
-                builder.AppendLine($"        {enumName},");
+                var enumValue = SanitizeConstName($"{type}_{displayName}");
+                if (existingValues.TryGetValue(enumValue, out int value))
+                {
+                    builder.AppendLine($"        {enumValue} = {value},");
+                }
+            }
+
+            // Then add new values
+            currentType = null;
+            foreach (var (type, displayName) in allSounds)
+            {
+                if (currentType != type && currentType != null)
+                {
+                    builder.AppendLine();
+                }
+
+                currentType = type;
+
+                var enumValue = SanitizeConstName($"{type}_{displayName}");
+                if (!existingValues.ContainsKey(enumValue))
+                {
+                    builder.AppendLine($"        {enumValue} = {nextValue++},");
+                }
             }
 
             builder.AppendLine("    }");
@@ -424,7 +494,8 @@ namespace Nexus.Audio
             // Generate converter class
             builder.AppendLine("    public static class SoundIdConverter");
             builder.AppendLine("    {");
-            builder.AppendLine($"        private static readonly Dictionary<{enumName}, string> _soundIdCache = new Dictionary<{enumName}, string>();");
+            builder.AppendLine(
+                $"        private static readonly Dictionary<{enumName}, string> _soundIdCache = new Dictionary<{enumName}, string>();");
             builder.AppendLine();
             builder.AppendLine("        static SoundIdConverter()");
             builder.AppendLine("        {");
@@ -448,13 +519,15 @@ namespace Nexus.Audio
             builder.AppendLine("                var typeName = typeClass.Name.ToUpperInvariant();");
             builder.AppendLine();
             builder.AppendLine("                // Get all constant fields in this type class");
-            builder.AppendLine("                var fields = typeClass.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)");
+            builder.AppendLine(
+                "                var fields = typeClass.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)");
             builder.AppendLine("                    .Where(fi => fi.IsLiteral && !fi.IsInitOnly);");
             builder.AppendLine();
             builder.AppendLine("                // Add constants with type prefix to match enum names");
             builder.AppendLine("                foreach (var field in fields)");
             builder.AppendLine("                {");
-            builder.AppendLine("                    constants[$\"{typeName}_{field.Name}\"] = (string)field.GetValue(null);");
+            builder.AppendLine(
+                "                    constants[$\"{typeName}_{field.Name}\"] = (string)field.GetValue(null);");
             builder.AppendLine("                }");
             builder.AppendLine("            }");
             builder.AppendLine();

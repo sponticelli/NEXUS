@@ -21,7 +21,7 @@ namespace Nexus.Audio
         {
             DrawDefaultInspector();
             EditorGUILayout.Space(10);
-            
+
             showIdGenerator = EditorGUILayout.Foldout(showIdGenerator, "Code Generator");
             if (showIdGenerator)
             {
@@ -39,7 +39,7 @@ namespace Nexus.Audio
                 // Additional Playlists Section
                 EditorGUILayout.LabelField("Additional Playlists", EditorStyles.boldLabel);
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                
+
                 var newPlaylist = EditorGUILayout.ObjectField(
                     "Add Playlist",
                     null,
@@ -77,6 +77,7 @@ namespace Nexus.Audio
 
                         EditorGUILayout.EndHorizontal();
                     }
+
                     EditorGUI.indentLevel--;
                 }
 
@@ -105,6 +106,46 @@ namespace Nexus.Audio
             }
         }
 
+        private string GetExistingEnumFile(string enumName)
+        {
+            var guids = AssetDatabase.FindAssets($"t:Script {enumName}");
+            foreach (var guid in guids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var content = System.IO.File.ReadAllText(path);
+                if (content.Contains($"public enum {enumName}"))
+                {
+                    return content;
+                }
+            }
+
+            return null;
+        }
+
+        private Dictionary<string, int> GetExistingEnumValues(string existingFile, string enumName)
+        {
+            var values = new Dictionary<string, int>();
+            if (string.IsNullOrEmpty(existingFile)) return values;
+
+            var enumRegex = new System.Text.RegularExpressions.Regex(
+                $@"public\s+enum\s+{enumName}\s*\{{([^}}]*)\}}",
+                System.Text.RegularExpressions.RegexOptions.Singleline
+            );
+
+            var match = enumRegex.Match(existingFile);
+            if (!match.Success) return values;
+
+            var valueRegex = new System.Text.RegularExpressions.Regex(@"(\w+)\s*=\s*(\d+)");
+            var valueMatches = valueRegex.Matches(match.Groups[1].Value);
+
+            foreach (System.Text.RegularExpressions.Match valueMatch in valueMatches)
+            {
+                values[valueMatch.Groups[1].Value] = int.Parse(valueMatch.Groups[2].Value);
+            }
+
+            return values;
+        }
+
         private void GenerateCode()
         {
             var allPlaylists = new List<MusicPlaylist> { (MusicPlaylist)target };
@@ -127,23 +168,42 @@ namespace Nexus.Audio
                 builder.AppendLine("{");
             }
 
+            // Get existing enum values to preserve ordering
+            var existingFile = GetExistingEnumFile(enumName);
+            var existingValues = GetExistingEnumValues(existingFile, enumName);
+
             // Generate enum with playlist prefixes
             builder.AppendLine($"    public enum {enumName}");
             builder.AppendLine("    {");
 
-            // Create enum values grouped by playlist
-            foreach (var playlist in allPlaylists.OrderBy(p => p.name))
+            var allTracks = allPlaylists.SelectMany(p => p.Tracks)
+                .OrderBy(t => t.DisplayName)
+                .ToList();
+
+            // Start with highest existing value or 0
+            int nextValue = existingValues.Count > 0 ? existingValues.Values.Max() + 1 : 0;
+
+            // First add existing values with their original values
+            foreach (var track in allTracks)
             {
-                var playlistPrefix = SanitizeClassName(playlist.name).ToUpperInvariant();
-                
-                // Add comment for playlist group
-                builder.AppendLine();
-                builder.AppendLine($"        // {playlist.name} Tracks");
-                
-                foreach (var track in playlist.Tracks.OrderBy(t => t.DisplayName))
+                var playlistPrefix = SanitizeClassName(track.Id).ToUpperInvariant();
+                var enumValue = $"{playlistPrefix}_{SanitizeConstName(track.DisplayName)}";
+
+                if (existingValues.TryGetValue(enumValue, out int value))
                 {
-                    var enumValue = $"{playlistPrefix}_{SanitizeConstName(track.DisplayName)}";
-                    builder.AppendLine($"        {enumValue},");
+                    builder.AppendLine($"        {enumValue} = {value},");
+                }
+            }
+
+            // Then add new values
+            foreach (var track in allTracks)
+            {
+                var playlistPrefix = SanitizeClassName(track.Id).ToUpperInvariant();
+                var enumValue = $"{playlistPrefix}_{SanitizeConstName(track.DisplayName)}";
+
+                if (!existingValues.ContainsKey(enumValue))
+                {
+                    builder.AppendLine($"        {enumValue} = {nextValue++},");
                 }
             }
 
@@ -171,29 +231,16 @@ namespace Nexus.Audio
                 builder.AppendLine();
             }
 
-            // Add helper method to get playlist name from enum
-            builder.AppendLine("        private static string GetPlaylistName(string enumValue)");
-            builder.AppendLine("        {");
-            builder.AppendLine("            int underscoreIndex = enumValue.IndexOf('_');");
-            builder.AppendLine("            return underscoreIndex > 0 ? enumValue.Substring(0, underscoreIndex) : enumValue;");
-            builder.AppendLine("        }");
-            builder.AppendLine();
-            
-            // Add helper method to get track name from enum
-            builder.AppendLine("        private static string GetTrackName(string enumValue)");
-            builder.AppendLine("        {");
-            builder.AppendLine("            int underscoreIndex = enumValue.IndexOf('_');");
-            builder.AppendLine("            return underscoreIndex > 0 ? enumValue.Substring(underscoreIndex + 1) : enumValue;");
-            builder.AppendLine("        }");
-
             builder.AppendLine("    }");
             builder.AppendLine();
 
             // Generate converter class
-            builder.AppendLine($"    public static class MusicTrackConverter");
+            builder.AppendLine("    public static class MusicTrackConverter");
             builder.AppendLine("    {");
-            builder.AppendLine($"        private static readonly Dictionary<{enumName}, string> _trackIdCache = new Dictionary<{enumName}, string>();");
-            builder.AppendLine($"        private static readonly Dictionary<string, {enumName}> _reverseCache = new Dictionary<string, {enumName}>();");
+            builder.AppendLine(
+                $"        private static readonly Dictionary<{enumName}, string> _trackIdCache = new Dictionary<{enumName}, string>();");
+            builder.AppendLine(
+                $"        private static readonly Dictionary<string, {enumName}> _reverseCache = new Dictionary<string, {enumName}>();");
             builder.AppendLine();
             builder.AppendLine("        static MusicTrackConverter()");
             builder.AppendLine("        {");
@@ -229,12 +276,14 @@ namespace Nexus.Audio
             builder.AppendLine("                var playlistName = playlistClass.Name.ToUpperInvariant();");
             builder.AppendLine();
             builder.AppendLine("                // Get all constant fields in this playlist class");
-            builder.AppendLine("                var fields = playlistClass.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)");
+            builder.AppendLine(
+                "                var fields = playlistClass.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)");
             builder.AppendLine("                    .Where(fi => fi.IsLiteral && !fi.IsInitOnly);");
             builder.AppendLine();
             builder.AppendLine("                foreach (var field in fields)");
             builder.AppendLine("                {");
-            builder.AppendLine("                    constants[$\"{playlistName}_{field.Name}\"] = (string)field.GetValue(null);");
+            builder.AppendLine(
+                "                    constants[$\"{playlistName}_{field.Name}\"] = (string)field.GetValue(null);");
             builder.AppendLine("                }");
             builder.AppendLine("            }");
             builder.AppendLine();
@@ -289,11 +338,11 @@ namespace Nexus.Audio
         {
             // Remove "Playlist" suffix if present
             name = name.Replace("Playlist", "");
-            
+
             // Replace invalid characters with underscore
             return new string(name
-                .Select(c => char.IsLetterOrDigit(c) ? c : '_')
-                .ToArray())
+                    .Select(c => char.IsLetterOrDigit(c) ? c : '_')
+                    .ToArray())
                 .TrimStart('0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
         }
 
