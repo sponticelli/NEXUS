@@ -10,7 +10,7 @@ namespace Nexus.Core.Rx.Unity
     {
         public event Action<Collision2D> OnCollision2DEnterEvent;
 
-        private void OnCollisionEnter(Collision2D collision)
+        private void OnCollisionEnter2D(Collision2D collision)
         {
             OnCollision2DEnterEvent?.Invoke(collision);
         }
