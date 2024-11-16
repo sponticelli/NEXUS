@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 1.2.0 (2024)
+- Add Reactive library
+
 ## 1.1.4 (2024-11-12)
 - Add ComponentRegistry service
 
