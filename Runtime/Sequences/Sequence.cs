@@ -8,6 +8,7 @@ namespace Nexus.Sequences
     public class Sequence : MonoBehaviour
     {
         [SerializeField] private bool _resetContextOnStart = true;
+        [SerializeField] private bool _debugMode = true;
         
         private BaseStep[] sequenceSteps;
         private int currentIndex = -1;
@@ -31,20 +32,33 @@ namespace Nexus.Sequences
             sequenceSteps = GetComponentsInChildren<BaseStep>()
                 .OrderBy(seq => seq.transform.GetSiblingIndex())
                 .ToArray();
+            
+            if (_debugMode)
+                Debug.Log($"Sequence {this.name} initialized with {sequenceSteps.Length} steps");
 
             foreach (var sequence in sequenceSteps)
+            {
                 sequence.InitStep();
+            }
         }
 
         public void StartSequencer()
         {
             if (!isRunning)
             {
+                if (_debugMode)
+                {
+                    Debug.Log($"Starting sequence {name}");
+                }
                 isRunning = true;
                 IsPaused = false;
                 if (_resetContextOnStart)
                     context = new StepContext();
                 StartNextStep();
+            }
+            else if (_debugMode)
+            {
+                Debug.LogWarning($"Sequence {name} is already running");
             }
         }
 
@@ -66,12 +80,20 @@ namespace Nexus.Sequences
             
             if (currentIndex >= sequenceSteps.Length)
             {
+                if (_debugMode)
+                {
+                    Debug.Log($"Sequence {name} completed");
+                }
                 OnCompleteEvent?.Invoke();
                 OnComplete?.Invoke();
                 return;
             }
 
             var nextStep = sequenceSteps[currentIndex];
+            if (_debugMode)
+            {
+                Debug.Log($"Sequence {name} starting step {nextStep.name}");
+            }
             var stepWithContext = nextStep as IStepWithContext;
             stepWithContext?.SetContext(context);
             nextStep.StartStep();
