@@ -34,7 +34,7 @@ namespace Nexus.Sequences
                 .ToArray();
             
             if (_debugMode)
-                Debug.Log($"Sequence {this.name} initialized with {sequenceSteps.Length} steps");
+                Debug.Log($"Sequence {this.name}: initialize with {sequenceSteps.Length} steps");
 
             foreach (var sequence in sequenceSteps)
             {
@@ -44,11 +44,15 @@ namespace Nexus.Sequences
 
         public void StartSequencer()
         {
+            if (_debugMode)
+            {
+                Debug.Log($"Sequence {name}: starting sequencer");
+            }
             if (!isRunning)
             {
                 if (_debugMode)
                 {
-                    Debug.Log($"Starting sequence {name}");
+                    Debug.Log($"Sequence {name}: started");
                 }
                 isRunning = true;
                 IsPaused = false;
@@ -58,7 +62,7 @@ namespace Nexus.Sequences
             }
             else if (_debugMode)
             {
-                Debug.LogWarning($"Sequence {name} is already running");
+                Debug.LogWarning($"Sequence {name}: already running");
             }
         }
 
@@ -82,7 +86,7 @@ namespace Nexus.Sequences
             {
                 if (_debugMode)
                 {
-                    Debug.Log($"Sequence {name} completed");
+                    Debug.Log($"Sequence {name}: completed");
                 }
                 OnCompleteEvent?.Invoke();
                 OnComplete?.Invoke();
@@ -92,7 +96,7 @@ namespace Nexus.Sequences
             var nextStep = sequenceSteps[currentIndex];
             if (_debugMode)
             {
-                Debug.Log($"Sequence {name} starting step {nextStep.name}");
+                Debug.Log($"Sequence {name}: starting step {nextStep.name}");
             }
             var stepWithContext = nextStep as IStepWithContext;
             stepWithContext?.SetContext(context);
