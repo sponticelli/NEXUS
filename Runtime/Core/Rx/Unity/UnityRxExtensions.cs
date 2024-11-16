@@ -30,7 +30,7 @@ namespace Nexus.Core.Rx.Unity
         {
             var subject = new Subject<Collision2D>();
             var observer = component.gameObject.AddComponent<Collision2DObserver>();
-            observer.OnCollisionEnterEvent += subject.OnNext;
+            observer.OnCollision2DEnterEvent += subject.OnNext;
             // TakeUntil will complete the sequence when the component is destroyed
             return subject.TakeUntil(component.OnDestroyAsObservable());
         }

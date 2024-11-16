@@ -8,11 +8,11 @@ namespace Nexus.Core.Rx.Unity
     /// </summary>
     internal class Collision2DObserver : MonoBehaviour
     {
-        public event Action<Collision2D> OnCollisionEnterEvent;
+        public event Action<Collision2D> OnCollision2DEnterEvent;
 
         private void OnCollisionEnter(Collision2D collision)
         {
-            OnCollisionEnterEvent?.Invoke(collision);
+            OnCollision2DEnterEvent?.Invoke(collision);
         }
     }
 }
