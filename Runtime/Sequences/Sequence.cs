@@ -21,6 +21,8 @@ namespace Nexus.Sequences
         public UnityEvent OnComplete;
         
         private StepContext context = new();
+        
+        private bool _isInitialized;
 
         private void Awake()
         {
@@ -29,6 +31,11 @@ namespace Nexus.Sequences
 
         internal void Initialize()
         {
+            if (_isInitialized)
+                return;
+            
+            _isInitialized = true;
+            
             sequenceSteps = GetComponentsInChildren<BaseStep>()
                 .OrderBy(seq => seq.transform.GetSiblingIndex())
                 .ToArray();
@@ -44,6 +51,7 @@ namespace Nexus.Sequences
 
         public void StartSequencer()
         {
+            Initialize();
             if (_debugMode)
             {
                 Debug.Log($"Sequence {name}: starting sequencer");
