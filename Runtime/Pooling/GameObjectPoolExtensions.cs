@@ -25,6 +25,8 @@ namespace Nexus.Pooling
             {
                 returnToPool.ReturnToPool();
             }
+            Debug.LogWarning($"GameObject {go.name} has no PooledObject component!");
+            
             GameObject.Destroy(go);
         }
     }
