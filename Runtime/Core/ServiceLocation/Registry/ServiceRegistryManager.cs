@@ -11,7 +11,7 @@ namespace Nexus.Core.ServiceLocation
 
         public ServiceRegistryManager(IServiceFactory serviceFactory)
         {
-            Debug.Log("Initializing ServiceRegistryManager with factory");
+            // Debug.Log("Initializing ServiceRegistryManager with factory");
             this.serviceFactory = serviceFactory;
         }
 
@@ -19,7 +19,7 @@ namespace Nexus.Core.ServiceLocation
             where TInterface : class
             where TImplementation : class, TInterface
         {
-            Debug.Log($"Registering service: Interface={typeof(TInterface).Name}, Implementation={typeof(TImplementation).Name}, Lifetime={lifetime}");
+            // Debug.Log($"Registering service: Interface={typeof(TInterface).Name}, Implementation={typeof(TImplementation).Name}, Lifetime={lifetime}");
             RegisterWithConfig<TInterface, TImplementation, object>(lifetime, null);
         }
 
@@ -33,10 +33,10 @@ namespace Nexus.Core.ServiceLocation
             Type interfaceType = typeof(TInterface);
             Type implementationType = typeof(TImplementation);
 
-            Debug.Log($"Registering service with config: Interface={interfaceType.Name}, Implementation={implementationType.Name}, Lifetime={lifetime}");
+            // Debug.Log($"Registering service with config: Interface={interfaceType.Name}, Implementation={implementationType.Name}, Lifetime={lifetime}");
 
             bool isMonoBehaviour = typeof(MonoBehaviour).IsAssignableFrom(implementationType);
-            Debug.Log($"Service {implementationType.Name} is MonoBehaviour: {isMonoBehaviour}");
+            // Debug.Log($"Service {implementationType.Name} is MonoBehaviour: {isMonoBehaviour}");
 
             var registry = new ServiceRegistry
             {
@@ -48,27 +48,27 @@ namespace Nexus.Core.ServiceLocation
 
             registry.Factory = () =>
             {
-                Debug.Log($"Factory creating instance of {implementationType.Name}");
+                // Debug.Log($"Factory creating instance of {implementationType.Name}");
                 return serviceFactory.CreateInstance(implementationType, isMonoBehaviour, configuration);
             };
             
             registries[interfaceType] = registry;
-            Debug.Log($"Service registered successfully: {interfaceType.Name}");
+            // Debug.Log($"Service registered successfully: {interfaceType.Name}");
         }
 
         public void Register(Type interfaceType, Type implementationType, ServiceLifetime lifetime, Func<object> factory = null)
         {
-            Debug.Log($"Registering service: Interface={interfaceType.Name}, Implementation={implementationType.Name}, Lifetime={lifetime}");
+            // Debug.Log($"Registering service: Interface={interfaceType.Name}, Implementation={implementationType.Name}, Lifetime={lifetime}");
     
             bool isMonoBehaviour = typeof(MonoBehaviour).IsAssignableFrom(implementationType);
-            Debug.Log($"Service {implementationType.Name} is MonoBehaviour: {isMonoBehaviour}");
+            // Debug.Log($"Service {implementationType.Name} is MonoBehaviour: {isMonoBehaviour}");
 
             // If we're replacing an existing registry, clean up any existing instances
             if (registries.TryGetValue(interfaceType, out var existingRegistry))
             {
                 if (existingRegistry.SingletonInstance is MonoBehaviour mb)
                 {
-                    Debug.Log($"Cleaning up existing instance of {interfaceType.Name}");
+                    // Debug.Log($"Cleaning up existing instance of {interfaceType.Name}");
                     GameObject.Destroy(mb.gameObject);
                 }
             }
@@ -82,7 +82,7 @@ namespace Nexus.Core.ServiceLocation
             };
 
             registries[interfaceType] = registry;
-            Debug.Log($"Service {interfaceType.Name} registered with lifetime {lifetime}");
+            // Debug.Log($"Service {interfaceType.Name} registered with lifetime {lifetime}");
         }
 
         public void RegisterInstance<TInterface>(TInterface instance,
@@ -90,7 +90,7 @@ namespace Nexus.Core.ServiceLocation
             where TInterface : class
         {
             Type interfaceType = typeof(TInterface);
-            Debug.Log($"Registering instance: Interface={interfaceType.Name}, Lifetime={lifetime}");
+            // Debug.Log($"Registering instance: Interface={interfaceType.Name}, Lifetime={lifetime}");
 
             bool isMonoBehaviour = instance is MonoBehaviour;
 
@@ -104,7 +104,7 @@ namespace Nexus.Core.ServiceLocation
             };
 
             registries[interfaceType] = registry;
-            Debug.Log($"Instance registered successfully: {interfaceType.Name}");
+            // Debug.Log($"Instance registered successfully: {interfaceType.Name}");
         }
 
         public bool IsRegistered<T>() where T : class
@@ -119,7 +119,7 @@ namespace Nexus.Core.ServiceLocation
 
         public ServiceRegistry GetRegistration(Type type)
         {
-            Debug.Log($"Getting registration for type: {type.Name}");
+            // Debug.Log($"Getting registration for type: {type.Name}");
             if (!registries.TryGetValue(type, out var registry))
             {
                 throw new InvalidOperationException($"No service of type {type.Name} has been registered!");

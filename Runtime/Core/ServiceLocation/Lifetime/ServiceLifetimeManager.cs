@@ -13,7 +13,7 @@ namespace Nexus.Core.ServiceLocation
 
         public object GetOrCreateInstance(ServiceRegistry registry, Type serviceType)
         {
-            Debug.Log($"GetOrCreateInstance called for {serviceType.Name} with lifetime {registry.Lifetime}");
+            // Debug.Log($"GetOrCreateInstance called for {serviceType.Name} with lifetime {registry.Lifetime}");
             
             return registry.Lifetime switch
             {
@@ -26,11 +26,11 @@ namespace Nexus.Core.ServiceLocation
 
         private object GetOrCreateSingleton(ServiceRegistry registry, Type serviceType)
         {
-            Debug.Log($"GetOrCreateSingleton called for {serviceType.Name}");
+            // Debug.Log($"GetOrCreateSingleton called for {serviceType.Name}");
             
             if (registry.SingletonInstance != null)
             {
-                Debug.Log($"Returning existing singleton instance of {serviceType.Name}");
+                // Debug.Log($"Returning existing singleton instance of {serviceType.Name}");
                 return registry.SingletonInstance;
             }
 
@@ -43,7 +43,7 @@ namespace Nexus.Core.ServiceLocation
 
                 try
                 {
-                    Debug.Log($"Creating new singleton instance of {serviceType.Name} using factory");
+                    // Debug.Log($"Creating new singleton instance of {serviceType.Name} using factory");
                     var instance = registry.Factory();
 
                     if (instance == null)
@@ -52,7 +52,7 @@ namespace Nexus.Core.ServiceLocation
                     }
 
                     registry.SingletonInstance = instance;
-                    Debug.Log($"Successfully created singleton instance of {serviceType.Name}");
+                    // Debug.Log($"Successfully created singleton instance of {serviceType.Name}");
                     return instance;
                 }
                 catch (Exception ex)
@@ -66,7 +66,7 @@ namespace Nexus.Core.ServiceLocation
         private object GetOrCreateSceneScoped(ServiceRegistry registry, Type serviceType)
         {
             string currentScene = SceneManager.GetActiveScene().name;
-            Debug.Log($"GetOrCreateSceneScoped called for {serviceType.Name} in scene {currentScene}");
+            // Debug.Log($"GetOrCreateSceneScoped called for {serviceType.Name} in scene {currentScene}");
             
             EnsureSceneDictionary(currentScene);
             var sceneServices = sceneScopedServices[currentScene];
@@ -75,7 +75,7 @@ namespace Nexus.Core.ServiceLocation
             {
                 try
                 {
-                    Debug.Log($"Creating new scene-scoped instance of {serviceType.Name} in scene {currentScene}");
+                    // Debug.Log($"Creating new scene-scoped instance of {serviceType.Name} in scene {currentScene}");
                     service = registry.Factory();
                     
                     if (service == null)
@@ -84,7 +84,7 @@ namespace Nexus.Core.ServiceLocation
                     }
 
                     sceneServices[serviceType] = service;
-                    Debug.Log($"Successfully created scene-scoped instance of {serviceType.Name}");
+                    // Debug.Log($"Successfully created scene-scoped instance of {serviceType.Name}");
                 }
                 catch (Exception ex)
                 {
@@ -94,7 +94,7 @@ namespace Nexus.Core.ServiceLocation
             }
             else
             {
-                Debug.Log($"Returning existing scene-scoped instance of {serviceType.Name} from scene {currentScene}");
+               // Debug.Log($"Returning existing scene-scoped instance of {serviceType.Name} from scene {currentScene}");
             }
 
             return service;
@@ -102,7 +102,7 @@ namespace Nexus.Core.ServiceLocation
 
         private object CreateTransient(ServiceRegistry registry, Type serviceType)
         {
-            Debug.Log($"CreateTransient called for {serviceType.Name}");
+            // Debug.Log($"CreateTransient called for {serviceType.Name}");
             
             try
             {
@@ -113,7 +113,7 @@ namespace Nexus.Core.ServiceLocation
                     throw new InvalidOperationException($"Factory failed to create transient instance of {serviceType.Name}");
                 }
 
-                Debug.Log($"Successfully created transient instance of {serviceType.Name}");
+                // Debug.Log($"Successfully created transient instance of {serviceType.Name}");
                 return instance;
             }
             catch (Exception ex)
@@ -133,13 +133,13 @@ namespace Nexus.Core.ServiceLocation
 
         public void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            Debug.Log($"Scene loaded: {scene.name}, Mode: {mode}");
+            // Debug.Log($"Scene loaded: {scene.name}, Mode: {mode}");
             EnsureSceneDictionary(scene.name);
         }
 
         public void OnSceneUnloaded(Scene scene)
         {
-            Debug.Log($"Scene unloaded: {scene.name}");
+            // Debug.Log($"Scene unloaded: {scene.name}");
     
             if (!sceneScopedServices.TryGetValue(scene.name, out var sceneServices)) 
             {
@@ -157,7 +157,7 @@ namespace Nexus.Core.ServiceLocation
                     {
                         if (mb != null && mb.gameObject != null)
                         {
-                            Debug.Log($"Destroying scene-scoped MonoBehaviour service {mb.GetType().Name} in scene {scene.name}");
+                            // Debug.Log($"Destroying scene-scoped MonoBehaviour service {mb.GetType().Name} in scene {scene.name}");
                             GameObject.Destroy(mb.gameObject);
                         }
                     }
@@ -165,7 +165,7 @@ namespace Nexus.Core.ServiceLocation
                     {
                         try
                         {
-                            Debug.Log($"Disposing scene-scoped service {service.GetType().Name}");
+                            // Debug.Log($"Disposing scene-scoped service {service.GetType().Name}");
                             disposable.Dispose();
                         }
                         catch (MissingReferenceException)
@@ -187,7 +187,7 @@ namespace Nexus.Core.ServiceLocation
 
         public void CleanupServices()
         {
-            Debug.Log("Cleaning up all services");
+            // Debug.Log("Cleaning up all services");
     
             try 
             {
@@ -206,7 +206,7 @@ namespace Nexus.Core.ServiceLocation
                             // Check if the MonoBehaviour and its gameObject are still valid
                             if (mb != null && mb.gameObject != null)
                             {
-                                Debug.Log($"Destroying scene-scoped MonoBehaviour service {mb.GetType().Name}");
+                                // Debug.Log($"Destroying scene-scoped MonoBehaviour service {mb.GetType().Name}");
                                 GameObject.Destroy(mb.gameObject);
                             }
                         }
@@ -214,7 +214,7 @@ namespace Nexus.Core.ServiceLocation
                         {
                             try
                             {
-                                Debug.Log($"Disposing scene-scoped service {service.GetType().Name}");
+                                // Debug.Log($"Disposing scene-scoped service {service.GetType().Name}");
                                 disposable.Dispose();
                             }
                             catch (MissingReferenceException)

@@ -66,7 +66,7 @@ namespace Nexus.Core.ServiceLocation
                 serviceName += "Service";
             }
             
-            Debug.Log($"Creating MonoBehaviour instance of {serviceName}");
+            // Debug.Log($"Creating MonoBehaviour instance of {serviceName}");
 
             // Check if a GameObject with this name already exists under ServiceLocator
             Transform existingService = serviceLocator.transform.Find(serviceName);
@@ -75,7 +75,7 @@ namespace Nexus.Core.ServiceLocation
                 var existingComponent = existingService.GetComponent(type);
                 if (existingComponent != null)
                 {
-                    Debug.Log($"Found existing instance of {serviceName}");
+                    // Debug.Log($"Found existing instance of {serviceName}");
                     return existingComponent;
                 }
                 
@@ -99,17 +99,17 @@ namespace Nexus.Core.ServiceLocation
         {
             if (configuration == null)
             {
-                Debug.Log($"No configuration provided for {instance.GetType().Name}");
+                // Debug.Log($"No configuration provided for {instance.GetType().Name}");
                 return;
             }
 
-            Debug.Log($"Configuring {instance.GetType().Name} with {configuration.GetType().Name}");
+            // Debug.Log($"Configuring {instance.GetType().Name} with {configuration.GetType().Name}");
             Type configurableType = typeof(IConfigurable<>).MakeGenericType(configuration.GetType());
             if (configurableType.IsAssignableFrom(instance.GetType()))
             {
                 var configureMethod = instance.GetType().GetMethod("Configure", new[] { configuration.GetType() });
                 configureMethod?.Invoke(instance, new[] { configuration });
-                Debug.Log($"Successfully configured {instance.GetType().Name}");
+                // Debug.Log($"Successfully configured {instance.GetType().Name}");
             }
         }
     }
