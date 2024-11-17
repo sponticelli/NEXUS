@@ -8,25 +8,32 @@ namespace Nexus.Pooling
         private IObjectPool<GameObject> pool;
         private float spawnTime;
         private float timeout = -1f;
+        
+        private bool _destroyed;
 
         public void Initialize(IObjectPool<GameObject> objectPool, float recycleTimeout = -1f)
         {
             pool = objectPool;
             timeout = recycleTimeout;
             spawnTime = Time.time;
+            _destroyed = false;
         }
 
         public void ReturnToPool()
         {
+            if (_destroyed)
+            {
+                return;
+            }
+            _destroyed = true;
+            
             if (pool != null)
             {
                 pool.Release(gameObject);
+                return;
             }
-            else
-            {
-                Debug.LogWarning($"PooledObject {gameObject.name} has no associated pool!");
-                Destroy(gameObject);
-            }
+            
+            Destroy(gameObject);
         }
 
         private void Update()
