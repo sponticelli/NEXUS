@@ -24,6 +24,7 @@ namespace Nexus.Pooling
             if (returnToPool != null)
             {
                 returnToPool.ReturnToPool();
+                return;
             }
             GameObject.Destroy(go);
         }
