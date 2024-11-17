@@ -21,12 +21,10 @@ namespace Nexus.Pooling
         public static void  ReturnToPool(this GameObject go)
         {
             var returnToPool = go.GetComponent<PooledObject>();
-            if (returnToPool == null)
+            if (returnToPool != null)
             {
                 returnToPool.ReturnToPool();
             }
-            Debug.LogWarning($"GameObject {go.name} has no PooledObject component!");
-            
             GameObject.Destroy(go);
         }
     }
