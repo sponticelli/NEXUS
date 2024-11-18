@@ -62,6 +62,17 @@ namespace Nexus.Pooling
         }
 
         public void OnAfterDeserialize() { }
+        
+        public override int GetHashCode()
+        {
+            if (prefab != null)
+                return prefab.GetHashCode();
+            
+            if (!string.IsNullOrEmpty(poolId))
+                return poolId.GetHashCode();
+            
+            return base.GetHashCode();
+        }
     }
 
     /// <summary>
