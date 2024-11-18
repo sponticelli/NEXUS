@@ -63,7 +63,7 @@ namespace Nexus.Pooling
 
         public void OnAfterDeserialize() { }
         
-        public override int GetHashCode()
+        public int GetUniqueId()
         {
             if (prefab != null)
                 return prefab.GetHashCode();
