@@ -63,7 +63,7 @@ namespace Nexus.Pooling
 
         public void OnAfterDeserialize() { }
         
-        public int GetUniqueId()
+        public int GetHashCode()
         {
             if (prefab != null)
                 return prefab.GetHashCode();
@@ -102,6 +102,11 @@ namespace Nexus.Pooling
         // ISerializationCallbackReceiver implementation
         public void OnBeforeSerialize() => baseReference.OnBeforeSerialize();
         public void OnAfterDeserialize() => baseReference.OnAfterDeserialize();
+        
+        public int GetHashCode()
+        {
+            return baseReference.GetHashCode();
+        }
     }
 
 }
