@@ -26,12 +26,22 @@ namespace Nexus.Pooling
         {
             if (!EnsureInitialized())
                 return null;
-                
+
             if (prefab != null)
-                return _poolingService.GetFromPool(prefab, position, rotation);
-                
+            {
+                var obj = _poolingService.GetFromPool(prefab, position, rotation);
+                if (obj == null) Debug.LogError($"Failed to get object {prefab.name} from pool. Did you forget to add it to the pool?");
+                return obj;
+            }
+
+
             if (!string.IsNullOrEmpty(poolId))
-                return _poolingService.GetFromPool(poolId, position, rotation);
+            {
+                var obj = _poolingService.GetFromPool(poolId, position, rotation);
+                if (obj == null) Debug.LogError($"Failed to get object from pool with ID {poolId}. Did you forget to add it to the pool?");
+                return obj;
+            }
+                
                 
             Debug.LogError("PoolReference has neither prefab nor pool ID configured");
             return null;
