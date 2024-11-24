@@ -23,6 +23,8 @@ namespace Nexus.Sequences
         private StepContext context = new();
         
         private bool _isInitialized;
+        
+        public StepContext Context => context;
 
         private void Awake()
         {

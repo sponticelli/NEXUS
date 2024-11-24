@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 namespace Nexus.Sequences
 {
+    [Serializable]
     public class StepContext
     {
         private Dictionary<Type, IStepData> dataStore = new();
